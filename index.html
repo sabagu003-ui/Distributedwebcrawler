@@ -1,0 +1,4080 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>WebCrawlr — Distributed Web Crawler</title>
+
+<!-- Google Fonts: clean readable fonts for the UI -->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet"/>
+
+<!-- Chart.js: for drawing bar charts of word frequencies -->
+<!-- jsPDF: for generating PDF reports in the browser -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+
+<style>
+/* ── RESET: remove default browser spacing from all elements ──────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* ── CSS VARIABLES: define colors once and reuse everywhere ──────────── */
+:root {
+  --bg: #ffffff;              /* Main background: white */
+  --bg2: #f8f9fb;             /* Card/panel background: very light grey */
+  --bg3: #f0f2f5;             /* Input/subtle background */
+  --border: #e2e6ed;          /* Border color: light grey */
+  --border2: #c8d0db;         /* Stronger border color */
+  --accent: #4f46e5;          /* Primary accent: indigo/purple */
+  --accent2: #10b981;         /* Secondary accent: green */
+  --accent-light: #eef2ff;    /* Light version of accent for backgrounds */
+  --text: #111827;            /* Main text: near black */
+  --text2: #6b7280;           /* Secondary text: grey */
+  --text3: #9ca3af;           /* Tertiary text: light grey */
+  --danger: #ef4444;          /* Error/danger: red */
+  --warning: #f59e0b;         /* Warning: amber */
+  --success: #10b981;         /* Success: green */
+  --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md: 0 4px 6px rgba(0,0,0,0.07), 0 2px 4px rgba(0,0,0,0.04);
+  --mono: 'JetBrains Mono', monospace;
+  --sans: 'Inter', sans-serif;
+  --radius: 10px;
+}
+
+/* ── BASE STYLES ─────────────────────────────────────────────────────── */
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--bg);           /* White background as requested */
+  color: var(--text);
+  font-family: var(--sans);
+  min-height: 100vh;
+  line-height: 1.6;
+}
+
+/* ── LAYOUT CONTAINER: centers content and limits max width ──────────── */
+.container {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 0 24px 60px;
+}
+
+/* ── TOP NAVIGATION BAR ──────────────────────────────────────────────── */
+.topbar {
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  padding: 0 24px;
+  position: sticky;              /* Stays at top when scrolling */
+  top: 0;
+  z-index: 100;
+  box-shadow: var(--shadow);
+}
+
+.topbar-inner {
+  max-width: 960px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 60px;
+}
+
+/* Logo in the navigation bar */
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+}
+
+.logo-icon {
+  width: 32px; height: 32px;
+  background: var(--accent);
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px;
+  color: white;
+}
+
+.logo-text {
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--text);
+  letter-spacing: -0.3px;
+}
+
+.logo-text span { color: var(--accent); }
+
+/* Navigation tabs at the top of the page */
+.nav-tabs {
+  display: flex;
+  gap: 4px;
+}
+
+.nav-tab {
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text2);
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  transition: all 0.15s;
+  font-family: var(--sans);
+}
+
+.nav-tab:hover { background: var(--bg3); color: var(--text); }
+.nav-tab.active { background: var(--accent-light); color: var(--accent); font-weight: 600; }
+
+/* ── HEADER SECTION ──────────────────────────────────────────────────── */
+header {
+  padding: 48px 0 36px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 36px;
+}
+
+h1 {
+  font-size: clamp(28px, 5vw, 44px);
+  font-weight: 800;
+  line-height: 1.1;
+  color: var(--text);
+  letter-spacing: -0.5px;
+  margin-bottom: 12px;
+}
+
+h1 em {
+  color: var(--accent);
+  font-style: normal;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: var(--text2);
+  max-width: 580px;
+  margin-bottom: 24px;
+  line-height: 1.6;
+}
+
+/* Step badges below the header */
+.steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.step-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 13px;
+  color: var(--text2);
+  font-weight: 500;
+}
+
+.step-num {
+  width: 20px; height: 20px;
+  background: var(--accent);
+  color: white;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* ── PAGE SECTIONS: each feature is its own section ─────────────────── */
+.page-section { display: none; }
+.page-section.active { display: block; }
+
+/* ── CARD / PANEL COMPONENT ──────────────────────────────────────────── */
+.panel {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+  margin-bottom: 20px;
+  box-shadow: var(--shadow);
+}
+
+/* Panel title (bold label at top of each card) */
+.panel-title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text3);
+  margin-bottom: 18px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.panel-title .icon {
+  width: 24px; height: 24px;
+  background: var(--accent-light);
+  border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px;
+}
+
+/* Section heading inside pages */
+.section-heading {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+
+.section-desc {
+  font-size: 14px;
+  color: var(--text2);
+  margin-bottom: 24px;
+}
+
+/* ── BACKEND CONNECTION INPUT ────────────────────────────────────────── */
+.ngrok-input-row {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.ngrok-input-row input {
+  flex: 1;
+  padding: 10px 14px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 13px;
+  font-family: var(--mono);
+  background: var(--bg);
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.ngrok-input-row input:focus { border-color: var(--accent); }
+
+/* ── CONNECTION STATUS INDICATOR ─────────────────────────────────────── */
+#connect-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text2);
+  font-family: var(--mono);
+}
+
+/* Animated dot showing connection state */
+.status-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--border2);
+  flex-shrink: 0;
+  transition: background 0.3s;
+}
+
+.status-dot.connected { background: var(--success); box-shadow: 0 0 6px var(--success); }
+.status-dot.error     { background: var(--danger);  box-shadow: 0 0 6px var(--danger); }
+.status-dot.connecting {
+  background: var(--warning);
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
+
+/* ── URL LIST INPUT AREA ─────────────────────────────────────────────── */
+.url-list { margin-bottom: 12px; }
+
+.url-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.url-row input {
+  flex: 1;
+  padding: 9px 12px;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: var(--mono);
+  background: var(--bg);
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.url-row input:focus { border-color: var(--accent); }
+
+/* Small red remove button next to each URL */
+.remove-btn {
+  padding: 6px 12px;
+  background: transparent;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  color: var(--text3);
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.15s;
+}
+
+.remove-btn:hover { background: #fef2f2; border-color: var(--danger); color: var(--danger); }
+
+/* Add URL button */
+.add-url-btn {
+  background: transparent;
+  border: 1.5px dashed var(--border2);
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 13px;
+  color: var(--text2);
+  cursor: pointer;
+  font-family: var(--sans);
+  font-weight: 500;
+  width: 100%;
+  transition: all 0.15s;
+}
+
+.add-url-btn:hover { background: var(--bg3); border-color: var(--accent); color: var(--accent); }
+
+/* ── SLIDERS (pages per site, top words) ─────────────────────────────── */
+.settings-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.setting-item label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text2);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 8px;
+}
+
+.slider-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.slider-wrap input[type="range"] {
+  flex: 1;
+  accent-color: var(--accent);
+  height: 4px;
+}
+
+.slider-val {
+  font-family: var(--mono);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent);
+  min-width: 24px;
+  text-align: right;
+}
+
+/* ── PRIMARY ACTION BUTTON ───────────────────────────────────────────── */
+.crawl-btn {
+  width: 100%;
+  padding: 14px;
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: var(--radius);
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: var(--sans);
+  letter-spacing: 0.02em;
+  transition: all 0.15s;
+  box-shadow: 0 2px 8px rgba(79,70,229,0.3);
+}
+
+.crawl-btn:hover { background: #4338ca; box-shadow: 0 4px 12px rgba(79,70,229,0.4); }
+.crawl-btn:disabled { opacity: 0.6; cursor: not-allowed; box-shadow: none; }
+
+/* Loading spinner animation on button */
+.crawl-btn.loading::after {
+  content: '';
+  display: inline-block;
+  width: 14px; height: 14px;
+  border: 2px solid rgba(255,255,255,0.4);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── LOG BOX: shows crawl progress messages ──────────────────────────── */
+.log-box {
+  font-family: var(--mono);
+  font-size: 12px;
+  background: #1e1e2e;       /* Dark code editor background */
+  color: #a6e3a1;            /* Green text like a terminal */
+  border-radius: 8px;
+  padding: 16px;
+  height: 160px;
+  overflow-y: auto;
+  line-height: 1.7;
+}
+
+.log-line       { display: block; }
+.log-line.ok    { color: #a6e3a1; }   /* Green for success */
+.log-line.err   { color: #f38ba8; }   /* Red for errors */
+.log-line.info  { color: #89dceb; }   /* Blue for info */
+.log-line.warn  { color: #f9e2af; }   /* Yellow for warnings */
+
+/* ── REAL-TIME PROGRESS SECTION ──────────────────────────────────────── */
+/* Container for the live progress bar and stats */
+.progress-section {
+  display: none;    /* Hidden until crawl starts */
+  margin-bottom: 20px;
+}
+
+.progress-section.visible { display: block; }
+
+/* Progress bar outer container */
+.progress-bar-wrap {
+  background: var(--bg3);
+  border-radius: 999px;
+  height: 12px;
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+
+/* The actual filled part of the progress bar */
+.progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--accent2));
+  border-radius: 999px;
+  width: 0%;
+  transition: width 0.4s ease;  /* Smooth animation as width changes */
+}
+
+/* Text below progress bar */
+.progress-stats {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  font-family: var(--mono);
+  color: var(--text2);
+  margin-bottom: 16px;
+}
+
+/* Grid showing live stats numbers */
+.live-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.live-stat-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  text-align: center;
+}
+
+.live-stat-val {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--accent);
+  font-family: var(--mono);
+  display: block;
+  margin-bottom: 2px;
+}
+
+.live-stat-val.green { color: var(--success); }
+
+.live-stat-lbl {
+  font-size: 11px;
+  color: var(--text3);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Current URL being crawled */
+.current-url-display {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 12px;
+  font-family: var(--mono);
+  color: var(--text2);
+  margin-bottom: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── METRIC CARDS (results summary) ──────────────────────────────────── */
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.metric-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px;
+  text-align: center;
+}
+
+.metric-val {
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--text);
+  font-family: var(--mono);
+  display: block;
+  margin-bottom: 2px;
+}
+
+.metric-val.accent { color: var(--accent); }
+.metric-val.green  { color: var(--success); }
+
+.metric-lbl {
+  font-size: 11px;
+  color: var(--text3);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* ── TAB BUTTONS ─────────────────────────────────────────────────────── */
+.tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 20px;
+}
+
+.tab-btn {
+  padding: 8px 16px;
+  border: none;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text2);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: all 0.15s;
+  font-family: var(--sans);
+}
+
+.tab-btn:hover  { color: var(--accent); }
+.tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+
+/* Tab panel content: hidden until active */
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* Chart container */
+.chart-wrap {
+  height: 340px;
+  position: relative;
+}
+
+/* ── WORD CLOUD BADGES ───────────────────────────────────────────────── */
+.word-cloud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.word-badge {
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-family: var(--mono);
+  font-size: 12px;
+  border: 1.5px solid var(--border);
+  display: flex; align-items: center; gap: 6px;
+  color: var(--text2);
+  background: var(--bg);
+  transition: all 0.15s;
+  cursor: default;
+}
+
+.word-badge:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-light); }
+
+.word-badge .wcount {
+  font-size: 11px;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+/* Live word badge: highlighted during real-time updates */
+.word-badge.live-new {
+  border-color: var(--accent2);
+  background: #ecfdf5;
+  animation: badge-pop 0.5s ease;
+}
+
+@keyframes badge-pop { 0% { transform: scale(0.85); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+
+/* ── DATA TABLE ──────────────────────────────────────────────────────── */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.data-table th {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text3);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0 12px 10px;
+  border-bottom: 1px solid var(--border);
+  font-weight: 600;
+}
+
+.data-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  font-family: var(--mono);
+  color: var(--text2);
+}
+
+.data-table td:first-child { color: var(--text); font-weight: 600; }
+.data-table tr:last-child td { border-bottom: none; }
+.data-table tr:hover td { background: var(--bg3); }
+
+/* Inline frequency bar in table */
+.bar-inline {
+  height: 5px;
+  background: var(--accent);
+  border-radius: 3px;
+  opacity: 0.7;
+  transition: width 0.5s ease;
+}
+
+/* ── SEARCH ENGINE SECTION ───────────────────────────────────────────── */
+.search-box-wrap {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.search-input {
+  flex: 1;
+  padding: 12px 16px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 15px;
+  font-family: var(--sans);
+  background: var(--bg);
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.search-input:focus { border-color: var(--accent); }
+
+.search-btn {
+  padding: 12px 24px;
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: var(--radius);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--sans);
+  transition: background 0.15s;
+}
+
+.search-btn:hover { background: #4338ca; }
+
+/* Individual search result card */
+.search-result {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 12px;
+  background: var(--bg);
+  transition: border-color 0.15s;
+}
+
+.search-result:hover { border-color: var(--accent); }
+
+/* Rank badge (1, 2, 3...) on search result */
+.result-rank {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px; height: 22px;
+  background: var(--accent-light);
+  color: var(--accent);
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.result-url {
+  font-size: 12px;
+  color: var(--accent);
+  font-family: var(--mono);
+  margin-bottom: 6px;
+  word-break: break-all;
+}
+
+.result-snippet {
+  font-size: 13px;
+  color: var(--text2);
+  line-height: 1.6;
+}
+
+/* Highlighted keyword inside snippet */
+.result-snippet mark {
+  background: #fef3c7;
+  color: var(--text);
+  padding: 0 2px;
+  border-radius: 2px;
+}
+
+.result-score {
+  font-size: 11px;
+  font-family: var(--mono);
+  color: var(--text3);
+  margin-top: 6px;
+}
+
+/* No results message */
+.no-results {
+  text-align: center;
+  padding: 40px;
+  color: var(--text3);
+  font-size: 14px;
+}
+
+/* Suggested search terms */
+.search-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.suggestion-chip {
+  padding: 5px 12px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 12px;
+  color: var(--text2);
+  cursor: pointer;
+  font-family: var(--mono);
+  transition: all 0.15s;
+}
+
+.suggestion-chip:hover { background: var(--accent-light); color: var(--accent); border-color: var(--accent); }
+
+/* ── SCHEDULE / HISTORY TABLE ────────────────────────────────────────── */
+.history-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.history-table th {
+  text-align: left;
+  padding: 8px 12px;
+  border-bottom: 2px solid var(--border);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text3);
+  font-weight: 700;
+}
+
+.history-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text2);
+}
+
+.history-table tr:last-child td { border-bottom: none; }
+.history-table tr:hover td { background: var(--bg3); }
+
+/* Status badges */
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.badge-green  { background: #ecfdf5; color: #059669; }
+.badge-blue   { background: var(--accent-light); color: var(--accent); }
+.badge-grey   { background: var(--bg3); color: var(--text3); }
+
+/* ── INFO BOXES ──────────────────────────────────────────────────────── */
+.info-box {
+  padding: 14px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  margin-bottom: 16px;
+  line-height: 1.6;
+}
+
+.info-box.blue   { background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; }
+.info-box.green  { background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; }
+.info-box.yellow { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; }
+
+/* ── FOOTER ──────────────────────────────────────────────────────────── */
+footer {
+  border-top: 1px solid var(--border);
+  padding: 24px 0;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text3);
+  font-family: var(--mono);
+}
+
+/* ── ERROR ACCORDION CARDS ───────────────────────────────────────────── */
+.error-card {
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.error-card:hover { background: var(--bg3); }
+.error-card.open { background: #fafbff; }
+
+.error-card-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 24px;
+}
+
+.error-badge {
+  font-size: 10px;
+  font-weight: 800;
+  font-family: var(--mono);
+  letter-spacing: 0.06em;
+  padding: 4px 8px;
+  border-radius: 6px;
+  min-width: 46px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.err-red    { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+.err-orange { background: #fff7ed; color: #ea580c; border: 1px solid #fed7aa; }
+.err-blue   { background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; }
+.err-purple { background: #f5f3ff; color: #7c3aed; border: 1px solid #ddd6fe; }
+
+.error-title-block { flex: 1; }
+.error-name  { font-size: 14px; font-weight: 700; color: var(--text); font-family: var(--mono); }
+.error-short { font-size: 12px; color: var(--text3); margin-top: 2px; }
+
+.error-chevron {
+  font-size: 22px;
+  color: var(--text3);
+  transition: transform 0.25s;
+  line-height: 1;
+  font-weight: 300;
+}
+.error-card.open .error-chevron { transform: rotate(90deg); color: var(--accent); }
+
+.error-body {
+  display: none;
+  padding: 0 24px 20px 84px;
+  animation: slideDown 0.2s ease;
+}
+.error-card.open .error-body { display: block; }
+
+@keyframes slideDown { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+
+.error-cause {
+  font-size: 13px;
+  color: var(--text2);
+  background: var(--bg3);
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  line-height: 1.6;
+}
+
+.error-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text3);
+  margin-bottom: 6px;
+}
+
+.error-steps { }
+
+.fix-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--text2);
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  line-height: 1.6;
+}
+.fix-step:last-child { border-bottom: none; }
+
+.fix-num {
+  min-width: 22px; height: 22px;
+  background: var(--accent);
+  color: white;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+/* ── AI CHAT FLOATING BUTTON + PANEL ─────────────────────────────────── */
+#ai-chat-fab {
+  position: fixed;
+  bottom: 28px;
+  right: 28px;
+  width: 56px; height: 56px;
+  background: linear-gradient(135deg, var(--accent), #7c3aed);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 4px 20px rgba(79,70,229,0.45);
+  z-index: 9999;
+  transition: transform 0.2s, box-shadow 0.2s;
+  font-size: 22px;
+  border: none;
+  color: white;
+}
+#ai-chat-fab:hover { transform: scale(1.1); box-shadow: 0 6px 28px rgba(79,70,229,0.55); }
+#ai-chat-fab.open { transform: rotate(45deg) scale(1.05); }
+
+#ai-chat-panel {
+  position: fixed;
+  bottom: 96px;
+  right: 28px;
+  width: 380px;
+  max-height: 560px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: 0 12px 48px rgba(0,0,0,0.18);
+  z-index: 9998;
+  display: none;
+  flex-direction: column;
+  overflow: hidden;
+  animation: chatSlideUp 0.25s ease;
+}
+#ai-chat-panel.open { display: flex; flex-direction: column; }
+
+@keyframes chatSlideUp {
+  from { opacity: 0; transform: translateY(16px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.ai-chat-header {
+  background: linear-gradient(135deg, var(--accent), #7c3aed);
+  padding: 16px 18px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.ai-chat-header-icon {
+  width: 32px; height: 32px;
+  background: rgba(255,255,255,0.2);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px;
+}
+.ai-chat-header-text { flex: 1; }
+.ai-chat-title { font-size: 14px; font-weight: 700; color: white; }
+.ai-chat-subtitle { font-size: 11px; color: rgba(255,255,255,0.7); margin-top: 1px; }
+
+.ai-chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ai-msg {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  animation: msgPop 0.2s ease;
+}
+@keyframes msgPop { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
+
+.ai-msg.user { flex-direction: row-reverse; }
+
+.ai-msg-avatar {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+.ai-msg.bot  .ai-msg-avatar { background: var(--accent-light); }
+.ai-msg.user .ai-msg-avatar { background: #f0fdf4; }
+
+.ai-msg-bubble {
+  max-width: 78%;
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.ai-msg.bot  .ai-msg-bubble { background: var(--bg2); border: 1px solid var(--border); color: var(--text); border-top-left-radius: 4px; }
+.ai-msg.user .ai-msg-bubble { background: var(--accent); color: white; border-top-right-radius: 4px; }
+
+.ai-typing {
+  display: flex; gap: 4px; align-items: center; padding: 4px 0;
+}
+.ai-typing span {
+  width: 7px; height: 7px; background: var(--text3); border-radius: 50%;
+  animation: typingBounce 1.2s infinite;
+}
+.ai-typing span:nth-child(2) { animation-delay: 0.2s; }
+.ai-typing span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes typingBounce { 0%,60%,100% { transform: translateY(0); } 30% { transform: translateY(-6px); } }
+
+.ai-quick-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 16px 12px;
+}
+.ai-chip {
+  padding: 5px 11px;
+  background: var(--accent-light);
+  color: var(--accent);
+  border: 1px solid #c7d2fe;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.ai-chip:hover { background: var(--accent); color: white; border-color: var(--accent); }
+
+.ai-chat-input-row {
+  display: flex;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.ai-chat-input-row input {
+  flex: 1;
+  padding: 9px 13px;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: var(--sans);
+  background: var(--bg);
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.15s;
+}
+.ai-chat-input-row input:focus { border-color: var(--accent); }
+.ai-send-btn {
+  width: 36px; height: 36px;
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 16px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+.ai-send-btn:hover { background: #4338ca; }
+.ai-send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ── RESPONSIVE: smaller screens ─────────────────────────────────────── */
+@media (max-width: 640px) {
+  #ai-chat-panel     { width: calc(100vw - 32px); right: 16px; bottom: 88px; }
+  .metrics-grid      { grid-template-columns: repeat(2, 1fr); }
+  .live-stats-grid   { grid-template-columns: repeat(2, 1fr); }
+  .settings-row      { grid-template-columns: 1fr; }
+  .ngrok-input-row   { flex-direction: column; }
+  h1                 { font-size: 28px; }
+  .topbar-inner      { flex-direction: column; height: auto; padding: 10px 0; gap: 8px; }
+}
+</style>
+</head>
+
+<body>
+
+<!-- ══════════════════════════════════════════════════════════════
+     TOP NAVIGATION BAR
+     Sticky bar at top with logo and tab navigation
+     ══════════════════════════════════════════════════════════════ -->
+<div class="topbar">
+  <div class="topbar-inner">
+
+    <!-- Logo -->
+    <a class="logo" href="#">
+      <div class="logo-icon">🕷</div>
+      <div class="logo-text">Web<span>Crawlr</span></div>
+    </a>
+
+    <!-- Navigation tabs: click to switch between different features -->
+    <nav class="nav-tabs">
+      <button class="nav-tab active" onclick="showSection('crawl', this)">🔍 Crawl</button>
+      <button class="nav-tab" onclick="showSection('realtime', this)">⚡ Live Dashboard</button>
+      <button class="nav-tab" onclick="showSection('search', this)">🔎 Search</button>
+      <button class="nav-tab" onclick="showSection('history', this)">📊 History</button>
+      <button class="nav-tab" onclick="showSection('report', this)">📄 Report</button>
+      <button class="nav-tab" onclick="showSection('setup', this)">📋 Setup Guide</button>
+    </nav>
+
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     MAIN PAGE CONTAINER
+     ══════════════════════════════════════════════════════════════ -->
+<div class="container">
+
+  <!-- Page Header -->
+  <header>
+    <h1>Crawl the web.<br><em>Intelligently.</em></h1>
+    <p class="subtitle">
+      Distributed web crawler powered by Dask + BeautifulSoup + Flask.
+      Enter URLs, crawl in parallel, get word frequency analysis, real-time progress, and search — all in your browser.
+    </p>
+    <div class="steps">
+      <div class="step-pill"><div class="step-num">1</div> Connect Colab backend</div>
+      <div class="step-pill"><div class="step-num">2</div> Enter URLs to crawl</div>
+      <div class="step-pill"><div class="step-num">3</div> Watch live results</div>
+      <div class="step-pill"><div class="step-num">4</div> Search crawled pages</div>
+    </div>
+  </header>
+
+  <!-- ════════════════════════════════════════════════════════════
+       BACKEND CONNECTION PANEL
+       Shown on every page section — user pastes their ngrok URL here
+       ════════════════════════════════════════════════════════════ -->
+  <div class="panel">
+    <div class="panel-title"><div class="icon">🔌</div> Backend Connection (Google Colab + ngrok)</div>
+    <div class="ngrok-input-row">
+      <input type="text" id="ngrok-url" placeholder="https://xxxx-xx-xx-xx-xx.ngrok-free.app" />
+      <button class="crawl-btn" style="width:auto;padding:10px 20px;font-size:14px;margin:0;" onclick="connectBackend()">Connect</button>
+    </div>
+    <div id="connect-status">
+      <span class="status-dot" id="status-dot"></span>
+      <span id="status-text">Not connected — paste your ngrok URL above and click Connect</span>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════
+       SECTION 1: STANDARD CRAWL
+       The original crawl feature from Part 9 of the notebook
+       ════════════════════════════════════════════════════════════ -->
+  <div class="page-section active" id="section-crawl">
+
+    <!-- URL Configuration Panel -->
+    <div class="panel">
+      <div class="panel-title"><div class="icon">🌐</div> Crawl Configuration</div>
+
+      <!-- List of URLs to crawl -->
+      <div class="url-list" id="url-list">
+        <div class="url-row">
+          <input type="text" value="https://quotes.toscrape.com" placeholder="https://example.com" />
+          <button class="remove-btn" onclick="removeUrl(this)" title="Remove">✕</button>
+        </div>
+        <div class="url-row">
+          <input type="text" value="https://books.toscrape.com" placeholder="https://example.com" />
+          <button class="remove-btn" onclick="removeUrl(this)" title="Remove">✕</button>
+        </div>
+      </div>
+
+      <!-- Button to add more URLs -->
+      <button class="add-url-btn" onclick="addUrl()">+ Add another URL</button>
+
+      <!-- Sliders to control crawl settings -->
+      <div class="settings-row" style="margin-top:20px;">
+        <div class="setting-item">
+          <label>Pages per site</label>
+          <div class="slider-wrap">
+            
+
+<!-- ✅ AFTER — max 20 pages per site -->
+<input type="range" min="1" max="20" value="3" id="pages-slider" step="1"
+              oninput="document.getElementById('pages-val').textContent=this.value" />
+            <span class="slider-val" id="pages-val">3</span>
+          </div>
+        </div>
+        <div class="setting-item">
+          <label>Top words to show</label>
+          <div class="slider-wrap">
+            <input type="range" min="5" max="30" value="15" id="words-slider" step="1"
+              oninput="document.getElementById('words-val').textContent=this.value" />
+            <span class="slider-val" id="words-val">15</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Start Crawl button -->
+    <button class="crawl-btn" id="crawl-btn" onclick="startCrawl()">▶ Start Crawling</button>
+
+    <!-- Live Log Panel: shows crawl progress messages -->
+    <div class="panel" style="margin-top:16px;">
+      <div class="panel-title"><div class="icon">📋</div> Live Log</div>
+      <div class="log-box" id="log-box">
+        <span class="log-line">Waiting for crawl to start...</span>
+      </div>
+    </div>
+
+    <!-- Results Panel: hidden until crawl completes -->
+    <div id="results" style="display:none;">
+      <div class="panel">
+        <div class="panel-title"><div class="icon">📈</div> Results</div>
+
+        <!-- Summary metric cards -->
+        <div class="metrics-grid">
+          <div class="metric-card">
+            <span class="metric-val accent" id="r-pages">—</span>
+            <div class="metric-lbl">Pages crawled</div>
+          </div>
+          <div class="metric-card">
+            <span class="metric-val" id="r-total">—</span>
+            <div class="metric-lbl">Total words</div>
+          </div>
+          <div class="metric-card">
+            <span class="metric-val green" id="r-unique">—</span>
+            <div class="metric-lbl">Unique words</div>
+          </div>
+          <div class="metric-card">
+            <span class="metric-val" id="r-sites">—</span>
+            <div class="metric-lbl">Sites</div>
+          </div>
+        </div>
+
+        <!-- Tab buttons to switch between chart views -->
+        <div class="tabs">
+          <button class="tab-btn active" onclick="switchTab('tab-bar', this)">Bar Chart</button>
+          <button class="tab-btn" onclick="switchTab('tab-table', this)">Top Words</button>
+          <button class="tab-btn" onclick="switchTab('tab-cloud', this)">Word Cloud</button>
+        </div>
+
+        <!-- Tab 1: Bar chart -->
+        <div id="tab-bar" class="tab-panel active">
+          <div class="chart-wrap" id="bar-wrap">
+            <canvas id="barChart" role="img" aria-label="Word frequency bar chart"></canvas>
+          </div>
+        </div>
+
+        <!-- Tab 2: Table of top words -->
+        <div id="tab-table" class="tab-panel">
+          <table class="data-table" id="word-table">
+            <thead><tr><th>#</th><th>Word</th><th>Count</th><th>Frequency</th></tr></thead>
+            <tbody id="word-tbody"></tbody>
+          </table>
+        </div>
+
+        <!-- Tab 3: Word cloud badges -->
+        <div id="tab-cloud" class="tab-panel">
+          <div class="word-cloud" id="word-cloud"></div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- end section-crawl -->
+
+
+  <!-- ════════════════════════════════════════════════════════════
+       SECTION 2: REAL-TIME DASHBOARD
+       Live progress tracking — shows updates as each page is crawled
+       Connects to Part 19's Flask backend with Server-Sent Events
+       ════════════════════════════════════════════════════════════ -->
+  <div class="page-section" id="section-realtime">
+
+    <div class="section-heading">⚡ Real-Time Dashboard</div>
+    <div class="section-desc">Watch the crawler work page-by-page. Progress bar, word counts, and word cloud all update live as each page is crawled.</div>
+
+    <div class="info-box blue">
+      💡 <strong>How to use:</strong> Connect your backend first (above), then click "Start Live Crawl". The dashboard updates automatically after every page without you clicking anything.
+    </div>
+
+    <!-- Real-time URL configuration panel -->
+    <div class="panel">
+      <div class="panel-title"><div class="icon">⚙️</div> Live Crawl Settings</div>
+
+      <!-- URLs to crawl (copied from crawl section) -->
+      <div class="url-list" id="rt-url-list">
+        <div class="url-row">
+          <input type="text" value="https://quotes.toscrape.com" placeholder="https://example.com" />
+          <button class="remove-btn" onclick="removeRtUrl(this)">✕</button>
+        </div>
+        <div class="url-row">
+          <input type="text" value="https://books.toscrape.com" placeholder="https://example.com" />
+          <button class="remove-btn" onclick="removeRtUrl(this)">✕</button>
+        </div>
+      </div>
+      <button class="add-url-btn" onclick="addRtUrl()">+ Add URL</button>
+
+      <div class="settings-row" style="margin-top:20px;">
+        <div class="setting-item">
+          <label>Pages per site</label>
+          <div class="slider-wrap">
+ 
+
+<!-- ✅ AFTER — max 20 pages per site -->
+<input type="range" min="1" max="20" value="3" id="rt-pages" step="1"
+              oninput="document.getElementById('rt-pages-val').textContent=this.value" />
+            <span class="slider-val" id="rt-pages-val">3</span>
+          </div>
+        </div>
+        <div class="setting-item">
+          <label>Top words to track</label>
+          <div class="slider-wrap">
+            <input type="range" min="5" max="25" value="15" id="rt-words" step="1"
+              oninput="document.getElementById('rt-words-val').textContent=this.value" />
+            <span class="slider-val" id="rt-words-val">15</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Start Live Crawl button -->
+    <button class="crawl-btn" id="rt-crawl-btn" onclick="startRealTimeCrawl()">⚡ Start Live Crawl</button>
+
+    <!-- Live progress section (hidden until crawl starts) -->
+    <div class="progress-section" id="rt-progress-section" style="margin-top:20px;">
+      <div class="panel">
+        <div class="panel-title"><div class="icon">📡</div> Live Progress</div>
+
+        <!-- Progress bar -->
+        <div class="progress-bar-wrap">
+          <div class="progress-bar-fill" id="rt-progress-fill"></div>
+        </div>
+
+        <!-- Progress text below bar -->
+        <div class="progress-stats">
+          <span id="rt-progress-text">Starting...</span>
+          <span id="rt-percent">0%</span>
+        </div>
+
+        <!-- Current URL being crawled right now -->
+        <div class="current-url-display" id="rt-current-url">Waiting for crawl to start...</div>
+
+        <!-- Live statistics grid -->
+        <div class="live-stats-grid">
+          <div class="live-stat-card">
+            <span class="live-stat-val" id="rt-done">0</span>
+            <div class="live-stat-lbl">Pages Done</div>
+          </div>
+          <div class="live-stat-card">
+            <span class="live-stat-val" id="rt-remaining">—</span>
+            <div class="live-stat-lbl">Remaining</div>
+          </div>
+          <div class="live-stat-card">
+            <span class="live-stat-val green" id="rt-words-so-far">0</span>
+            <div class="live-stat-lbl">Words Found</div>
+          </div>
+          <div class="live-stat-card">
+            <span class="live-stat-val" id="rt-status-badge">—</span>
+            <div class="live-stat-lbl">Status</div>
+          </div>
+        </div>
+
+        <!-- Live word cloud: updates after every page -->
+        <div class="panel-title" style="margin-top:4px;"><div class="icon">☁️</div> Live Word Cloud (updates after each page)</div>
+        <div class="word-cloud" id="rt-word-cloud">
+          <span style="color:var(--text3);font-size:13px;font-family:var(--mono);">Words will appear here as pages are crawled...</span>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Final Results (shown after crawl completes) -->
+    <div id="rt-final-results" style="display:none;">
+      <div class="panel">
+        <div class="panel-title"><div class="icon">✅</div> Final Results</div>
+        <div class="metrics-grid">
+          <div class="metric-card">
+            <span class="metric-val accent" id="rt-r-pages">—</span>
+            <div class="metric-lbl">Pages Crawled</div>
+          </div>
+          <div class="metric-card">
+            <span class="metric-val" id="rt-r-total">—</span>
+            <div class="metric-lbl">Total Words</div>
+          </div>
+          <div class="metric-card">
+            <span class="metric-val green" id="rt-r-unique">—</span>
+            <div class="metric-lbl">Unique Words</div>
+          </div>
+          <div class="metric-card">
+            <span class="metric-val" id="rt-r-sites">—</span>
+            <div class="metric-lbl">Sites</div>
+          </div>
+        </div>
+        <!-- Final word cloud after crawl is done -->
+        <div class="panel-title"><div class="icon">📊</div> Final Top Words</div>
+        <div class="word-cloud" id="rt-final-cloud"></div>
+      </div>
+    </div>
+
+  </div><!-- end section-realtime -->
+
+
+  <!-- ════════════════════════════════════════════════════════════
+       SECTION 3: SEARCH ENGINE
+       Search through previously crawled pages
+       ════════════════════════════════════════════════════════════ -->
+  <div class="page-section" id="section-search">
+
+    <div class="section-heading">🔎 Search Crawled Pages</div>
+    <div class="section-desc">Search through all the pages you've crawled. Results are ranked by relevance using TF-IDF scoring — the same technique used by real search engines.</div>
+
+    <div class="info-box yellow">
+      ⚠️ <strong>Note:</strong> You must crawl some pages first (use the Crawl tab). The search works on whatever the backend has crawled during this session.
+    </div>
+
+    <!-- Search input box -->
+    <div class="panel">
+      <div class="panel-title"><div class="icon">🔍</div> Search Query</div>
+
+      <div class="search-box-wrap">
+        <input type="text" class="search-input" id="search-input"
+          placeholder="Type a word or phrase to search crawled pages..."
+          onkeydown="if(event.key==='Enter') doSearch()" />
+        <button class="search-btn" onclick="doSearch()">Search</button>
+      </div>
+
+      <!-- Suggested quick search terms -->
+      <div style="font-size:12px;color:var(--text3);margin-bottom:8px;">Quick searches:</div>
+      
+    </div>
+
+    <!-- Search results appear here -->
+    <div id="search-results">
+      <div class="no-results" id="search-placeholder">
+        <div style="font-size:32px;margin-bottom:12px;">🔍</div>
+        Enter a search term above to search crawled pages.<br>
+        <span style="font-size:12px;font-family:var(--mono);color:var(--text3);">Uses TF-IDF ranking — same as real search engines</span>
+      </div>
+    </div>
+
+  </div><!-- end section-search -->
+
+
+  <!-- ════════════════════════════════════════════════════════════
+       SECTION 4: CRAWL HISTORY
+       Shows all past crawl sessions with timestamps and stats
+       ════════════════════════════════════════════════════════════ -->
+  <div class="page-section" id="section-history">
+
+    <div class="section-heading">📊 Crawl History</div>
+    <div class="section-desc">Every crawl session is recorded here automatically. Compare word counts and unique words across sessions to track how websites change over time.</div>
+
+    <div class="info-box blue">
+      💡 Crawl history is stored in your browser's memory for this session. For permanent history across sessions, use Part 12 of the Colab notebook which saves to Google Drive.
+    </div>
+
+    <!-- History controls -->
+    <div style="display:flex;gap:10px;margin-bottom:20px;align-items:center;">
+      <button class="crawl-btn" style="width:auto;padding:10px 20px;font-size:13px;" onclick="loadHistory()">
+        🔄 Refresh History
+      </button>
+      <button onclick="clearHistory()" style="padding:10px 20px;font-size:13px;border:1.5px solid var(--border);border-radius:var(--radius);background:var(--bg);color:var(--text2);cursor:pointer;font-family:var(--sans);">
+        🗑 Clear History
+      </button>
+      <span style="font-size:12px;color:var(--text3);font-family:var(--mono);" id="history-count">0 sessions recorded</span>
+    </div>
+
+    <!-- History table container -->
+    <div class="panel" id="history-panel">
+      <div class="panel-title"><div class="icon">🕒</div> Session History</div>
+      <div id="history-content">
+        <div class="no-results">
+          <div style="font-size:32px;margin-bottom:12px;">📋</div>
+          No crawl history yet.<br>
+          <span style="font-size:12px;color:var(--text3);">Run a crawl first to see history here.</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Trend chart: appears when 2+ sessions exist -->
+    <div id="history-chart-section" style="display:none;">
+      <div class="panel">
+        <div class="panel-title"><div class="icon">📈</div> Word Count Trends</div>
+        <div class="chart-wrap" style="height:260px;">
+          <canvas id="historyChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- end section-history -->
+
+
+
+  <!-- ════════════════════════════════════════════════════════════
+       SECTION 5: REPORT & EMAIL ALERTS
+       ════════════════════════════════════════════════════════════ -->
+  <div class="page-section" id="section-report">
+
+    <div class="section-heading">📄 Final Report & Email Alerts</div>
+    <div class="section-desc">Generate a PDF summary report of your crawl results and optionally email it to yourself.</div>
+
+    <div class="info-box yellow">
+      ⚠️ <strong>Note:</strong> Run a crawl first (Crawl tab) before generating a report. The report will include all session data.
+    </div>
+
+    <!-- Email Alert Configuration -->
+    <div class="panel">
+      <div class="panel-title"><div class="icon">📧</div> Email Alert Settings</div>
+      <div class="section-desc" style="margin-bottom:16px;">
+        Enter your email below and the backend will send a crawl-complete alert after each crawl.<br>
+        <strong>Requires:</strong> Gmail App Password configured in your Colab notebook (Part 11).
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+        <div>
+          <label style="display:block;font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">Your Email Address</label>
+          <input type="email" id="alert-email" placeholder="you@gmail.com"
+            style="width:100%;padding:10px 14px;border:1.5px solid var(--border);border-radius:var(--radius);font-size:13px;background:var(--bg);color:var(--text);outline:none;font-family:var(--sans);" />
+        </div>
+        <div>
+          <label style="display:block;font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">Alert on Crawl Complete</label>
+          <select id="alert-enabled"
+            style="width:100%;padding:10px 14px;border:1.5px solid var(--border);border-radius:var(--radius);font-size:13px;background:var(--bg);color:var(--text);outline:none;font-family:var(--sans);">
+            <option value="yes">✅ Yes — send email after each crawl</option>
+            <option value="no">❌ No — disable email alerts</option>
+          </select>
+        </div>
+      </div>
+
+      <button onclick="saveEmailSettings()"
+        style="padding:10px 24px;background:var(--accent);color:white;border:none;border-radius:var(--radius);font-size:14px;font-weight:600;cursor:pointer;font-family:var(--sans);">
+        💾 Save Email Settings
+      </button>
+      <span id="email-save-status" style="font-size:13px;color:var(--success);margin-left:12px;display:none;">✓ Saved!</span>
+    </div>
+
+
+
+    <!-- PDF Report Generator -->
+    <div class="panel">
+      <div class="panel-title"><div class="icon">📊</div> Generate PDF Report</div>
+      <p style="font-size:13px;color:var(--text2);margin-bottom:20px;">
+        Creates a full PDF report with crawl statistics, top words, session history, and timestamps.
+        Works entirely in your browser — no backend needed.
+      </p>
+
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px;">
+        <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:14px;text-align:center;">
+          <div style="font-size:22px;font-weight:800;color:var(--accent);font-family:var(--mono);" id="rep-sessions">0</div>
+          <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;">Sessions</div>
+        </div>
+        <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:14px;text-align:center;">
+          <div style="font-size:22px;font-weight:800;color:var(--text);font-family:var(--mono);" id="rep-pages">0</div>
+          <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;">Total Pages</div>
+        </div>
+        <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:14px;text-align:center;">
+          <div style="font-size:22px;font-weight:800;color:var(--success);font-family:var(--mono);" id="rep-words">0</div>
+          <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;">Total Words</div>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:12px;align-items:center;">
+        <button onclick="generatePDFReport()"
+          style="padding:14px 32px;background:var(--accent);color:white;border:none;border-radius:var(--radius);font-size:15px;font-weight:700;cursor:pointer;font-family:var(--sans);box-shadow:0 2px 8px rgba(79,70,229,0.3);">
+          ⬇ Download PDF Report
+        </button>
+        <button onclick="refreshReportStats()"
+          style="padding:14px 20px;background:transparent;color:var(--text2);border:1.5px solid var(--border);border-radius:var(--radius);font-size:14px;font-weight:600;cursor:pointer;font-family:var(--sans);">
+          🔄 Refresh Stats
+        </button>
+      </div>
+      <div id="pdf-status" style="font-size:13px;color:var(--text2);margin-top:12px;font-family:var(--mono);"></div>
+    </div>
+
+  </div><!-- end section-report -->
+
+
+  <!-- ════════════════════════════════════════════════════════════
+       SECTION 6: SETUP GUIDE — Colab Steps
+       ════════════════════════════════════════════════════════════ -->
+  <div class="page-section" id="section-setup">
+
+    <div class="section-heading">📋 Complete Setup Guide</div>
+    <div class="section-desc">All steps are listed here — from setting up the Colab notebook to running the website. Read through once before you begin.</div>
+
+    <!-- Overall flow -->
+    <div class="info-box blue" style="margin-bottom:24px;">
+      💡 <strong>Flow:</strong> Open the notebook in Google Colab → Run cells one by one → Copy the ngrok URL → Paste it into this website → Start crawling!
+    </div>
+
+    <!-- ── PART 1: Installation ── -->
+    <div class="panel">
+      <div class="panel-title"><div class="icon">1️⃣</div> PART 1 — Installation (Cell 2)</div>
+      <p style="font-size:13px;color:var(--text2);margin-bottom:14px;">Run this cell first — it installs all required libraries.</p>
+      <div class="log-box" style="height:auto;padding:14px;">
+<span class="log-line info">!pip install dask[complete] beautifulsoup4 requests nltk matplotlib seaborn fpdf2 --quiet</span>
+<span class="log-line info">!pip install flask flask-cors pyngrok langdetect --quiet</span>
+<span class="log-line ok">import nltk</span>
+<span class="log-line ok">nltk.download('stopwords', quiet=True)</span>
+<span class="log-line ok">print('All libraries installed!')</span>
+      </div>
+      <div class="info-box green" style="margin-top:12px;margin-bottom:0;">✅ Expected output: <strong>"All libraries installed successfully!"</strong></div>
+    </div>
+
+    <!-- ── PART 2: Google Drive ── -->
+    <div class="panel">
+      <div class="panel-title"><div class="icon">2️⃣</div> PART 1 — Connect Google Drive (Cell 3)</div>
+      <p style="font-size:13px;color:var(--text2);margin-bottom:14px;">Mount your Drive so that files can be saved.</p>
+      <div class="log-box" style="height:auto;padding:14px;">
+<span class="log-line info">from google.colab import drive</span>
+<span class="log-line info">drive.mount('/content/drive')</span>
+<span class="log-line ok">BASE = '/content/drive/MyDrive/distributed-crawler'</span>
+<span class="log-line ok">import os</span>
+<span class="log-line ok">os.makedirs(f'{BASE}/data', exist_ok=True)</span>
+<span class="log-line ok">os.makedirs(f'{BASE}/plots', exist_ok=True)</span>
+      </div>
+      <div class="info-box yellow" style="margin-top:12px;margin-bottom:0;">⚠️ A popup will appear — click <strong>"Connect to Google Drive"</strong> to allow access.</div>
+    </div>
+
+    <!-- ── PART 9: Flask Server ── -->
+    <div class="panel" style="border-color:var(--accent);border-width:2px;">
+      <div class="panel-title" style="color:var(--accent);"><div class="icon">⭐</div> PART 9 — Start the Flask Server (Cell 30 + 31 + 32 + 33)</div>
+      <p style="font-size:13px;color:var(--text2);margin-bottom:14px;">
+        This is the most important part. <strong>Run all 4 cells one by one</strong> — the last cell will output the URL you need.
+      </p>
+
+      <div style="font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">Cell 30 — Libraries Install</div>
+      <div class="log-box" style="height:auto;padding:14px;margin-bottom:16px;">
+<span class="log-line info">!pip install flask flask-cors pyngrok langdetect --quiet</span>
+<span class="log-line ok">import nltk; nltk.download('stopwords', quiet=True)</span>
+<span class="log-line ok">print('Server libraries installed!')</span>
+      </div>
+
+      <div style="font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">Cell 31 — Imports</div>
+      <div class="log-box" style="height:auto;padding:14px;margin-bottom:16px;">
+<span class="log-line info">from flask import Flask, request, jsonify</span>
+<span class="log-line info">from flask_cors import CORS</span>
+<span class="log-line info">from pyngrok import ngrok</span>
+<span class="log-line info">import threading, requests as req</span>
+<span class="log-line info">from bs4 import BeautifulSoup</span>
+<span class="log-line info">import dask.bag as db, re, os</span>
+<span class="log-line info">from collections import Counter</span>
+<span class="log-line ok">print('All imports done!')</span>
+      </div>
+
+      <div style="font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">Cell 32 — Crawler Functions (just run it, no changes needed)</div>
+      <div class="log-box" style="height:auto;padding:14px;margin-bottom:16px;">
+<span class="log-line warn"># Just run this cell — no edits needed</span>
+<span class="log-line info">def fetch_url_api(url): ...</span>
+<span class="log-line info">def build_page_urls(base_url, pages): ...</span>
+<span class="log-line info">def run_crawl(urls, pages_per_site, top_n): ...</span>
+      </div>
+
+      <div style="font-size:12px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">⭐ Cell 33 — Flask Server + ngrok URL (FILL IN YOUR DETAILS HERE)</div>
+      <div class="log-box" style="height:auto;padding:14px;margin-bottom:12px;">
+<span class="log-line warn"># ── ONLY EDIT THESE 3 LINES ─────────────────────────────────</span>
+<span class="log-line ok">conf.get_default().auth_token = "YOUR_NGROK_TOKEN"  # dashboard.ngrok.com</span>
+<span class="log-line ok">SENDER_EMAIL    = 'you@gmail.com'                   # For email alerts</span>
+<span class="log-line ok">SENDER_PASSWORD = 'xxxx xxxx xxxx xxxx'             # Gmail App Password</span>
+<span class="log-line warn"># ─────────────────────────────────────────────────────────────</span>
+<span class="log-line info"># Everything else runs automatically — just run the cell</span>
+      </div>
+      <div class="info-box green" style="margin-bottom:0;">
+        ✅ After the cell runs, you will see this in the output:<br>
+        <code style="font-family:var(--mono);font-size:13px;background:#d1fae5;padding:4px 8px;border-radius:4px;display:inline-block;margin-top:6px;">&gt;&gt;&gt; https://xxxx-xx-xx.ngrok-free.app &lt;&lt;&lt;</code><br>
+        <strong style="display:inline-block;margin-top:6px;">Copy this URL → Paste it into the "Crawl" tab on this website → Click Connect</strong>
+      </div>
+    </div>
+
+    <!-- ── PART 11: Email ── -->
+    <div class="panel">
+      <div class="panel-title"><div class="icon">📧</div> PART 11 — Email Alerts Setup</div>
+      <p style="font-size:13px;color:var(--text2);margin-bottom:16px;">You will receive an automatic email when each crawl completes.</p>
+
+      <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:10px;">Step 1 — Create a Gmail App Password:</div>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;">
+        <div style="display:flex;align-items:flex-start;gap:10px;">
+          <div style="min-width:24px;height:24px;background:var(--accent);color:white;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;margin-top:1px;">1</div>
+          <div style="font-size:13px;color:var(--text2);">Open <strong style="color:var(--text);">myaccount.google.com</strong></div>
+        </div>
+        <div style="display:flex;align-items:flex-start;gap:10px;">
+          <div style="min-width:24px;height:24px;background:var(--accent);color:white;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;margin-top:1px;">2</div>
+          <div style="font-size:13px;color:var(--text2);">Go to <strong style="color:var(--text);">Security</strong> tab → Turn ON <strong style="color:var(--text);">2-Step Verification</strong></div>
+        </div>
+        <div style="display:flex;align-items:flex-start;gap:10px;">
+          <div style="min-width:24px;height:24px;background:var(--accent);color:white;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;margin-top:1px;">3</div>
+          <div style="font-size:13px;color:var(--text2);">Back to Security → Click <strong style="color:var(--text);">App passwords</strong></div>
+        </div>
+        <div style="display:flex;align-items:flex-start;gap:10px;">
+          <div style="min-width:24px;height:24px;background:var(--accent);color:white;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;margin-top:1px;">4</div>
+          <div style="font-size:13px;color:var(--text2);">Enter <strong style="color:var(--text);">"crawler"</strong> as the app name → Click <strong style="color:var(--text);">Generate</strong></div>
+        </div>
+        <div style="display:flex;align-items:flex-start;gap:10px;">
+          <div style="min-width:24px;height:24px;background:var(--accent2);color:white;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;margin-top:1px;">5</div>
+          <div style="font-size:13px;color:var(--text2);"><strong style="color:var(--success);">You'll get a 16-character code</strong> → Copy it → Paste it into <code style="font-family:var(--mono);background:var(--bg3);padding:2px 6px;border-radius:3px;">SENDER_PASSWORD</code> in Cell 33</div>
+        </div>
+      </div>
+
+      <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:10px;">Step 2 — Fill in Cell 40:</div>
+      <div class="log-box" style="height:auto;padding:14px;margin-bottom:12px;">
+<span class="log-line ok">SENDER_EMAIL    = 'you@gmail.com'        <span style="color:#f9e2af;"># ← your Gmail</span></span>
+<span class="log-line ok">SENDER_PASSWORD = 'abcdabcdabcdabcd'     <span style="color:#f9e2af;"># ← 16-char App Password (no spaces)</span></span>
+<span class="log-line ok">RECEIVER_EMAIL  = 'you@gmail.com'        <span style="color:#f9e2af;"># ← keep same (send to yourself)</span></span>
+      </div>
+
+      <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:10px;">Step 3 — In the "Report" tab on this website:</div>
+      <div style="font-size:13px;color:var(--text2);">Enter your email address → Click <strong>Save Settings</strong> → An email will automatically be sent after every crawl.</div>
+    </div>
+
+    <!-- ── PART 13: Multilingual ── -->
+    <div class="panel">
+      <div class="panel-title"><div class="icon">🌐</div> PART 13 — Multi-Language Support (Cell 47 + 48 + 49)</div>
+      <p style="font-size:13px;color:var(--text2);margin-bottom:14px;">
+        This feature automatically detects which language a crawled page is in and uses the appropriate stop words for that language.
+        <strong>Run these cells after Part 9.</strong>
+      </p>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;">
+        <span class="step-pill"><div class="step-num">✓</div> English</span>
+        <span class="step-pill"><div class="step-num">✓</div> Urdu (custom)</span>
+        <span class="step-pill"><div class="step-num">✓</div> Arabic</span>
+        <span class="step-pill"><div class="step-num">✓</div> French</span>
+        <span class="step-pill"><div class="step-num">✓</div> German</span>
+        <span class="step-pill"><div class="step-num">✓</div> Spanish</span>
+        <span class="step-pill"><div class="step-num">✓</div> Russian</span>
+        <span class="step-pill"><div class="step-num">✓</div> Turkish</span>
+      </div>
+      <div class="log-box" style="height:auto;padding:14px;">
+<span class="log-line warn"># Cell 47 — Install</span>
+<span class="log-line info">!pip install langdetect --quiet</span>
+<span class="log-line ok">print('Multi-language libraries installed!')</span>
+<br>
+<span class="log-line warn"># Cell 48 — Configuration (just run it)</span>
+<span class="log-line info">from langdetect import detect, DetectorFactory</span>
+<span class="log-line info">DetectorFactory.seed = 42  # for consistent results</span>
+<span class="log-line ok">print('Language config loaded!')</span>
+<br>
+<span class="log-line warn"># Cell 49 — Run Multilang Analysis</span>
+<span class="log-line info"># This will automatically detect the language of each crawled page</span>
+<span class="log-line ok">print('Analysis complete! X pages processed.')</span>
+      </div>
+      <div class="info-box green" style="margin-top:12px;margin-bottom:0;">
+        ✅ The output will show: <strong>Language: english | URL: ...</strong><br>
+        If you crawl an Urdu or Arabic site, it will detect that language too!
+      </div>
+    </div>
+
+    <!-- ── PART 19: Real-Time ── -->
+    <div class="panel">
+      <div class="panel-title"><div class="icon">⚡</div> PART 19 — Real-Time Dashboard (Cell 84 → 88)</div>
+      <p style="font-size:13px;color:var(--text2);margin-bottom:14px;">
+        Run this part for a live progress bar and word cloud. <strong>Use this instead of Part 9</strong> when you want real-time features.
+      </p>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;">
+        <div style="display:flex;align-items:flex-start;gap:10px;">
+          <div style="min-width:24px;height:24px;background:var(--accent);color:white;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;margin-top:1px;">1</div>
+          <div style="font-size:13px;color:var(--text2);">Run Cell 84 — extra libraries will be installed</div>
+        </div>
+        <div style="display:flex;align-items:flex-start;gap:10px;">
+          <div style="min-width:24px;height:24px;background:var(--accent);color:white;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;margin-top:1px;">2</div>
+          <div style="font-size:13px;color:var(--text2);">Run Cells 85, 86, 87 (no edits needed)</div>
+        </div>
+        <div style="display:flex;align-items:flex-start;gap:10px;">
+          <div style="min-width:24px;height:24px;background:var(--accent2);color:white;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;margin-top:1px;">3</div>
+          <div style="font-size:13px;color:var(--text2);">In Cell 88, enter your <strong style="color:var(--accent);">NGROK_AUTH_TOKEN</strong> → run it → you'll get a <strong>port 5001</strong> URL</div>
+        </div>
+        <div style="display:flex;align-items:flex-start;gap:10px;">
+          <div style="min-width:24px;height:24px;background:var(--accent2);color:white;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;margin-top:1px;">4</div>
+          <div style="font-size:13px;color:var(--text2);">Paste that URL into this website → use the <strong>"⚡ Live Dashboard"</strong> tab</div>
+        </div>
+      </div>
+      <div class="info-box yellow" style="margin-bottom:0;">
+        ⚠️ Do not run Part 9 and Part 19 at the same time — use only one backend at a time.
+      </div>
+    </div>
+
+    <!-- ── Ngrok Token ── -->
+    <div class="panel">
+      <div class="panel-title"><div class="icon">🔑</div> Where to Get Your Ngrok Token?</div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <div style="display:flex;align-items:flex-start;gap:10px;">
+          <div style="min-width:24px;height:24px;background:var(--accent);color:white;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;margin-top:1px;">1</div>
+          <div style="font-size:13px;color:var(--text2);">Go to <strong style="color:var(--text);">dashboard.ngrok.com</strong> — create a free account</div>
+        </div>
+        <div style="display:flex;align-items:flex-start;gap:10px;">
+          <div style="min-width:24px;height:24px;background:var(--accent);color:white;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;margin-top:1px;">2</div>
+          <div style="font-size:13px;color:var(--text2);">Left menu → Click <strong style="color:var(--text);">"Your Authtoken"</strong></div>
+        </div>
+        <div style="display:flex;align-items:flex-start;gap:10px;">
+          <div style="min-width:24px;height:24px;background:var(--accent2);color:white;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;margin-top:1px;">3</div>
+          <div style="font-size:13px;color:var(--text2);">Copy the token → paste it into <code style="font-family:var(--mono);background:var(--bg3);padding:2px 6px;border-radius:3px;">auth_token = "HERE"</code> in Colab Cell 33</div>
+        </div>
+      </div>
+      <div class="info-box blue" style="margin-top:16px;margin-bottom:0;">
+        💡 <strong>If you see ERR_NGROK_334:</strong> Cell 33 already has <code style="font-family:var(--mono);">ngrok.kill()</code> at the top — it handles this automatically. Just re-run the cell.
+      </div>
+    </div>
+
+    <!-- ── Common Errors ── -->
+    <div class="panel" style="padding:0;overflow:hidden;">
+      <div style="padding:20px 24px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+        <div class="panel-title" style="margin:0;"><div class="icon">🛠</div> Common Errors &amp; Fixes</div>
+        <span style="font-size:12px;color:var(--text3);font-family:var(--mono);">Click any error to expand</span>
+      </div>
+
+      <!-- Error Card 1 -->
+      <div class="error-card" onclick="toggleError(this)">
+        <div class="error-card-header">
+          <div class="error-badge err-red">ERR</div>
+          <div class="error-title-block">
+            <div class="error-name">ERR_NGROK_334</div>
+            <div class="error-short">ngrok tunnel failed to start</div>
+          </div>
+          <div class="error-chevron">›</div>
+        </div>
+        <div class="error-body">
+          <div class="error-cause">
+            <span class="error-label">🔍 Cause</span>
+            A previous ngrok session is still running, blocking the new one.
+          </div>
+          <div class="error-steps">
+            <span class="error-label">✅ Fix — Step by Step</span>
+            <div class="fix-step"><span class="fix-num">1</span>Cell 33 already has <code>ngrok.kill()</code> at the top — this clears the old session.</div>
+            <div class="fix-step"><span class="fix-num">2</span>Simply <strong>re-run Cell 33</strong>. The kill command runs first, then a fresh tunnel starts.</div>
+            <div class="fix-step"><span class="fix-num">3</span>Copy the new URL that appears and paste it into the website.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Error Card 2 -->
+      <div class="error-card" onclick="toggleError(this)">
+        <div class="error-card-header">
+          <div class="error-badge err-orange">CONN</div>
+          <div class="error-title-block">
+            <div class="error-name">Connection Failed</div>
+            <div class="error-short">Website can't reach the backend</div>
+          </div>
+          <div class="error-chevron">›</div>
+        </div>
+        <div class="error-body">
+          <div class="error-cause">
+            <span class="error-label">🔍 Cause</span>
+            The ngrok URL is wrong, expired, or Colab stopped running.
+          </div>
+          <div class="error-steps">
+            <span class="error-label">✅ Fix — Checklist</span>
+            <div class="fix-step"><span class="fix-num">1</span>Is the <strong>Colab tab still open</strong> in your browser? (It disconnects if closed)</div>
+            <div class="fix-step"><span class="fix-num">2</span>Did Cell 33 finish running? Look for the <code>https://xxxx.ngrok-free.app</code> URL in its output.</div>
+            <div class="fix-step"><span class="fix-num">3</span>Copy the <strong>full URL including https://</strong> and paste it in the website's connect box.</div>
+            <div class="fix-step"><span class="fix-num">4</span>Click <strong>Connect</strong> — the dot should turn green.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Error Card 3 -->
+      <div class="error-card" onclick="toggleError(this)">
+        <div class="error-card-header">
+          <div class="error-badge err-blue">MAIL</div>
+          <div class="error-title-block">
+            <div class="error-name">Email Send Failed</div>
+            <div class="error-short">Crawl complete alerts not sending</div>
+          </div>
+          <div class="error-chevron">›</div>
+        </div>
+        <div class="error-body">
+          <div class="error-cause">
+            <span class="error-label">🔍 Cause</span>
+            You're using your regular Gmail password instead of a Google App Password.
+          </div>
+          <div class="error-steps">
+            <span class="error-label">✅ Fix — Step by Step</span>
+            <div class="fix-step"><span class="fix-num">1</span>Go to <strong>myaccount.google.com → Security → App Passwords</strong></div>
+            <div class="fix-step"><span class="fix-num">2</span>Generate a new password for "crawler" — you'll get a <strong>16-character code</strong></div>
+            <div class="fix-step"><span class="fix-num">3</span>Copy it (remove any spaces) and paste into <code>SENDER_PASSWORD</code> in Cell 33</div>
+            <div class="fix-step"><span class="fix-num">4</span>Re-run Cell 33 and test using the "Send Test Email" button in the Report tab</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Error Card 4 -->
+      <div class="error-card" onclick="toggleError(this)">
+        <div class="error-card-header">
+          <div class="error-badge err-purple">MOD</div>
+          <div class="error-title-block">
+            <div class="error-name">ModuleNotFoundError: langdetect</div>
+            <div class="error-short">Language detection library missing</div>
+          </div>
+          <div class="error-chevron">›</div>
+        </div>
+        <div class="error-body">
+          <div class="error-cause">
+            <span class="error-label">🔍 Cause</span>
+            The multi-language cells (Part 13) were run before installing the required package.
+          </div>
+          <div class="error-steps">
+            <span class="error-label">✅ Fix — Step by Step</span>
+            <div class="fix-step"><span class="fix-num">1</span>Run <strong>Cell 47</strong> first: <code>!pip install langdetect --quiet</code></div>
+            <div class="fix-step"><span class="fix-num">2</span>Wait for it to finish (you'll see "Multi-language libraries installed!")</div>
+            <div class="fix-step"><span class="fix-num">3</span>Then re-run Cell 48 and Cell 49 in order</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Error Card 5 -->
+      <div class="error-card" onclick="toggleError(this)">
+        <div class="error-card-header">
+          <div class="error-badge err-red">CRWL</div>
+          <div class="error-title-block">
+            <div class="error-name">No Results / Empty Crawl</div>
+            <div class="error-short">Crawl returns 0 pages or words</div>
+          </div>
+          <div class="error-chevron">›</div>
+        </div>
+        <div class="error-body">
+          <div class="error-cause">
+            <span class="error-label">🔍 Cause</span>
+            URL is malformed, the site blocks scrapers, or the backend isn't connected.
+          </div>
+          <div class="error-steps">
+            <span class="error-label">✅ Fix — Checklist</span>
+            <div class="fix-step"><span class="fix-num">1</span>Make sure the URL starts with <code>https://</code> — not <code>http</code> or just the domain</div>
+            <div class="fix-step"><span class="fix-num">2</span>Open the URL in a new browser tab — can you load it manually?</div>
+            <div class="fix-step"><span class="fix-num">3</span>Try a known-working URL like <code>https://quotes.toscrape.com</code> to test</div>
+            <div class="fix-step"><span class="fix-num">4</span>Check the Live Log box — it shows exactly which page failed and why</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Error Card 6 -->
+      <div class="error-card" style="border-bottom:none;" onclick="toggleError(this)">
+        <div class="error-card-header">
+          <div class="error-badge err-orange">DISC</div>
+          <div class="error-title-block">
+            <div class="error-name">Colab Disconnects</div>
+            <div class="error-short">Runtime timed out or was closed</div>
+          </div>
+          <div class="error-chevron">›</div>
+        </div>
+        <div class="error-body">
+          <div class="error-cause">
+            <span class="error-label">🔍 Cause</span>
+            Google Colab free tier disconnects after ~90 minutes of inactivity.
+          </div>
+          <div class="error-steps">
+            <span class="error-label">✅ Fix — Step by Step</span>
+            <div class="fix-step"><span class="fix-num">1</span>Go back to your Colab notebook and click <strong>Reconnect</strong> (top right)</div>
+            <div class="fix-step"><span class="fix-num">2</span>Re-run <strong>Cell 33</strong> — a new ngrok URL will be generated</div>
+            <div class="fix-step"><span class="fix-num">3</span>Paste the new URL into the website and click Connect again</div>
+            <div class="fix-step"><span class="fix-num">4</span>💡 Tip: Keep your Colab tab active to avoid disconnects during long crawls</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+  </div><!-- end section-setup -->
+
+  <!-- Page Footer -->
+  <footer>
+    Built with Dask &nbsp;|&nbsp; BeautifulSoup4 &nbsp;|&nbsp; NLTK &nbsp;|&nbsp; Flask &nbsp;|&nbsp; Google Colab
+    &nbsp;&nbsp;—&nbsp;&nbsp; WebCrawlr v3.0
+  </footer>
+
+</div><!-- end container -->
+
+
+<!-- ══════════════════════════════════════════════════════════════
+     JAVASCRIPT
+     All interactivity, API calls, and rendering logic
+     ══════════════════════════════════════════════════════════════ -->
+<script>
+
+// ── GLOBAL STATE VARIABLES ────────────────────────────────────────────────
+let backendUrl = '';         // The ngrok URL entered by the user
+let barChart = null;         // Chart.js bar chart instance (for crawl results)
+let historyChart = null;     // Chart.js line chart instance (for history trends)
+let crawlHistory = [];       // Array of all crawl session records
+let crawledPages = [];       // Array of crawled page data (for search engine)
+let searchIndex = {};        // Inverted index built from crawled pages (word -> pages)
+let eventSource = null;      // SSE connection for real-time dashboard
+
+
+// ══════════════════════════════════════════════════════════════════════════
+// NAVIGATION: switch between page sections
+// ══════════════════════════════════════════════════════════════════════════
+
+function showSection(name, btn) {
+  // Hide all sections
+  document.querySelectorAll('.page-section').forEach(s => s.classList.remove('active'));
+  // Deactivate all nav tabs
+  document.querySelectorAll('.nav-tab').forEach(b => b.classList.remove('active'));
+  // Show the selected section and activate its tab
+  document.getElementById('section-' + name).classList.add('active');
+  btn.classList.add('active');
+
+  // Load history when history tab is opened
+  if (name === 'history') loadHistory();
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════
+// UTILITY FUNCTIONS
+// ══════════════════════════════════════════════════════════════════════════
+
+// Add a timestamped message to the log box
+function log(msg, type='') {
+  const box = document.getElementById('log-box');
+  const line = document.createElement('span');
+  line.className = 'log-line' + (type ? ' ' + type : '');
+  const time = new Date().toLocaleTimeString();
+  line.textContent = `[${time}] ${msg}`;
+  box.appendChild(document.createElement('br'));
+  box.appendChild(line);
+  box.scrollTop = box.scrollHeight;  // Auto-scroll to bottom
+}
+
+// Clear all log messages
+function clearLog() {
+  document.getElementById('log-box').innerHTML = '';
+}
+
+// Switch between tab panels (bar chart, table, word cloud)
+function switchTab(id, btn) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  btn.classList.add('active');
+}
+
+// Add a URL row to the crawl section
+// Add URL row to main crawl section — max 20 websites allowed
+function addUrl() {
+  const list = document.getElementById('url-list');
+
+  // ✅ CHANGED: Allow up to 20 websites (was unlimited before)
+  const currentCount = list.querySelectorAll('.url-row').length;
+  if (currentCount >= 20) {
+    alert('Maximum 20 websites allowed at once.');
+    return;
+  }
+
+  const row = document.createElement('div');
+  row.className = 'url-row';
+  row.innerHTML = `<input type="text" placeholder="https://example.com" />
+    <button class="remove-btn" onclick="removeUrl(this)" title="Remove">✕</button>`;
+  list.appendChild(row);
+}
+
+// Add URL row to real-time section — max 20 websites allowed
+function addRtUrl() {
+  const list = document.getElementById('rt-url-list');
+
+  // ✅ CHANGED: Allow up to 20 websites (was unlimited before)
+  const currentCount = list.querySelectorAll('.url-row').length;
+  if (currentCount >= 20) {
+    alert('Maximum 20 websites allowed at once.');
+    return;
+  }
+
+  const row = document.createElement('div');
+  row.className = 'url-row';
+  row.innerHTML = `<input type="text" placeholder="https://example.com" />
+    <button class="remove-btn" onclick="removeRtUrl(this)">✕</button>`;
+  list.appendChild(row);
+}
+// Remove a URL row (minimum 1 must remain)
+function removeUrl(btn) {
+  const rows = document.querySelectorAll('#url-list .url-row');
+  if (rows.length > 1) btn.parentElement.remove();
+}
+
+// Add URL row to real-time section
+function addRtUrl() {
+  const list = document.getElementById('rt-url-list');
+  const row = document.createElement('div');
+  row.className = 'url-row';
+  row.innerHTML = `<input type="text" placeholder="https://example.com" />
+    <button class="remove-btn" onclick="removeRtUrl(this)">✕</button>`;
+  list.appendChild(row);
+}
+
+// Remove a URL row from real-time section
+function removeRtUrl(btn) {
+  const rows = document.querySelectorAll('#rt-url-list .url-row');
+  if (rows.length > 1) btn.parentElement.remove();
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════
+// BACKEND CONNECTION
+// ══════════════════════════════════════════════════════════════════════════
+
+async function connectBackend() {
+  // Get the URL entered by the user (remove trailing slash)
+  const url = document.getElementById('ngrok-url').value.trim().replace(/\/$/, '');
+  if (!url) { alert('Please paste your ngrok URL first.'); return; }
+
+  backendUrl = url;
+  const dot = document.getElementById('status-dot');
+  const txt = document.getElementById('status-text');
+
+  // Show "connecting..." state
+  txt.textContent = 'Connecting...';
+  dot.className = 'status-dot connecting';
+
+  try {
+    // Ping the backend to check if it's alive
+    // ngrok-skip-browser-warning header bypasses ngrok's warning page
+    const resp = await fetch(`${backendUrl}/ping`, {
+      method: 'GET',
+      headers: { 'ngrok-skip-browser-warning': 'true' }
+    });
+
+    if (resp.ok) {
+      // Connection successful
+      dot.className = 'status-dot connected';
+      txt.textContent = 'Connected — backend is live and ready';
+      log('Backend connected at ' + backendUrl, 'ok');
+    } else {
+      throw new Error('Server returned error status');
+    }
+
+  } catch(e) {
+    // Connection failed
+    dot.className = 'status-dot error';
+    txt.textContent = 'Connection failed — check your ngrok URL and try again';
+    log('Connection failed: ' + e.message, 'err');
+    backendUrl = '';
+  }
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════
+// STANDARD CRAWL (Section 1)
+// Sends crawl request and waits for full response
+// ══════════════════════════════════════════════════════════════════════════
+
+async function startCrawl() {
+  // Check backend is connected
+  if (!backendUrl) {
+    alert('Please connect your Colab backend first (paste ngrok URL and click Connect).');
+    return;
+  }
+
+  // Collect all URLs from the input fields
+  const urls = Array.from(document.querySelectorAll('#url-list input'))
+    .map(i => i.value.trim()).filter(Boolean);
+  if (!urls.length) { alert('Please enter at least one URL.'); return; }
+
+  // Get slider values
+  const pages = parseInt(document.getElementById('pages-slider').value);
+  const topN  = parseInt(document.getElementById('words-slider').value);
+
+  // Disable button and show loading state
+  const btn = document.getElementById('crawl-btn');
+  btn.disabled = true;
+  btn.classList.add('loading');
+  btn.textContent = 'Crawling...';
+
+  clearLog();
+  document.getElementById('results').style.display = 'none';
+
+  // Log the crawl settings
+  log('Starting distributed crawl with Dask...', 'info');
+  log(`Sites: ${urls.join(', ')}`, 'info');
+  log(`Pages per site: ${pages} | Top words: ${topN}`, 'info');
+
+  try {
+    log('Sending request to Flask backend...', 'info');
+
+    // Send POST request to the /crawl endpoint
+    const resp = await fetch(`${backendUrl}/crawl`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'ngrok-skip-browser-warning': 'true'  // Bypass ngrok warning page
+      },
+      body: JSON.stringify({ urls, pages_per_site: pages, top_n: topN })
+    });
+
+    if (!resp.ok) {
+      const err = await resp.text();
+      throw new Error(err);
+    }
+
+    const data = await resp.json();
+
+    // Log results
+    log('Crawl complete!', 'ok');
+    log(`Pages crawled: ${data.pages_crawled}`, 'ok');
+    log(`Total words: ${data.total_words.toLocaleString()}`, 'ok');
+    log(`Unique words: ${data.unique_words.toLocaleString()}`, 'ok');
+
+    // Save crawled data for search engine and history
+    saveToCrawlHistory(data, urls);
+
+    // Render results
+    renderResults(data, topN);
+
+  } catch(e) {
+    log('Error: ' + e.message, 'err');
+    alert('Crawl failed: ' + e.message);
+  }
+
+  // Re-enable button
+  btn.disabled = false;
+  btn.classList.remove('loading');
+  btn.textContent = '▶ Start Crawling';
+}
+
+
+// Render all result panels (metric cards, bar chart, table, word cloud)
+function renderResults(data, topN) {
+  document.getElementById('results').style.display = 'block';
+
+  // Update metric cards
+  document.getElementById('r-pages').textContent  = data.pages_crawled;
+  document.getElementById('r-total').textContent  = data.total_words.toLocaleString();
+  document.getElementById('r-unique').textContent = data.unique_words.toLocaleString();
+  document.getElementById('r-sites').textContent  = data.sites_count;
+
+  // Get the top words list
+  const words    = data.top_words.slice(0, topN);
+  const labels   = words.map(w => w[0]);
+  const counts   = words.map(w => w[1]);
+  const maxCount = Math.max(...counts);
+
+  // ── Bar chart ────────────────────────────────────────────────────────
+  document.getElementById('bar-wrap').style.height = Math.max(300, labels.length * 28 + 80) + 'px';
+  if (barChart) barChart.destroy();  // Destroy old chart before creating new one
+
+  barChart = new Chart(document.getElementById('barChart'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Word count',
+        data: counts,
+        backgroundColor: 'rgba(79,70,229,0.15)',  // Light indigo fill
+        borderColor: '#4f46e5',                    // Indigo border
+        borderWidth: 1.5,
+        borderRadius: 4
+      }]
+    },
+    options: {
+      indexAxis: 'y',                    // Horizontal bar chart
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: {
+          ticks: { color: '#6b7280', font: { family: 'JetBrains Mono', size: 11 } },
+          grid: { color: 'rgba(0,0,0,0.05)' }
+        },
+        y: {
+          ticks: { color: '#111827', font: { family: 'JetBrains Mono', size: 11 } },
+          grid: { display: false }
+        }
+      }
+    }
+  });
+
+  // ── Word table ────────────────────────────────────────────────────────
+  const tbody = document.getElementById('word-tbody');
+  tbody.innerHTML = '';
+  words.forEach((w, i) => {
+    const pct = Math.round((w[1] / maxCount) * 100);
+    tbody.innerHTML += `
+      <tr>
+        <td>${i + 1}</td>
+        <td>${w[0]}</td>
+        <td>${w[1].toLocaleString()}</td>
+        <td><div class="bar-inline" style="width:${pct}%"></div></td>
+      </tr>`;
+  });
+
+  // ── Word cloud badges ─────────────────────────────────────────────────
+  const cloud = document.getElementById('word-cloud');
+  cloud.innerHTML = '';
+  words.forEach(w => {
+    const badge = document.createElement('div');
+    badge.className = 'word-badge';
+    badge.innerHTML = `${w[0]} <span class="wcount">${w[1]}</span>`;
+    cloud.appendChild(badge);
+  });
+
+  document.getElementById('results').scrollIntoView({ behavior: 'smooth' });
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════
+// REAL-TIME DASHBOARD (Section 2)
+// Uses Server-Sent Events for live progress updates
+// ══════════════════════════════════════════════════════════════════════════
+
+async function startRealTimeCrawl() {
+  // Check backend is connected
+  if (!backendUrl) {
+    alert('Please connect your Colab backend first.');
+    return;
+  }
+
+  // Collect URLs
+  const urls = Array.from(document.querySelectorAll('#rt-url-list input'))
+    .map(i => i.value.trim()).filter(Boolean);
+  if (!urls.length) { alert('Please enter at least one URL.'); return; }
+
+  const pages = parseInt(document.getElementById('rt-pages').value);
+  const topN  = parseInt(document.getElementById('rt-words').value);
+
+  // Disable button
+  const btn = document.getElementById('rt-crawl-btn');
+  btn.disabled = true;
+  btn.classList.add('loading');
+  btn.textContent = 'Live crawl running...';
+
+  // Show progress section, hide final results
+  document.getElementById('rt-progress-section').classList.add('visible');
+  document.getElementById('rt-final-results').style.display = 'none';
+
+  // Reset all progress indicators
+  document.getElementById('rt-progress-fill').style.width = '0%';
+  document.getElementById('rt-percent').textContent = '0%';
+  document.getElementById('rt-progress-text').textContent = 'Starting crawl...';
+  document.getElementById('rt-done').textContent = '0';
+  document.getElementById('rt-remaining').textContent = '—';
+  document.getElementById('rt-words-so-far').textContent = '0';
+  document.getElementById('rt-status-badge').textContent = '⏳';
+  document.getElementById('rt-word-cloud').innerHTML =
+    '<span style="color:var(--text3);font-size:13px;font-family:var(--mono);">Crawling started — words appearing soon...</span>';
+
+  // Close any existing SSE connection
+  if (eventSource) {
+    eventSource.close();
+    eventSource = null;
+  }
+
+  // ── Step 1: Connect to SSE stream BEFORE starting the crawl ───────────
+  // The stream endpoint keeps the connection open and sends events
+  try {
+    eventSource = new EventSource(`${backendUrl}/stream`);
+
+    // Handler for each incoming SSE event from the server
+    eventSource.onmessage = function(event) {
+      try {
+        const data = JSON.parse(event.data);
+
+        if (data.type === 'connected') {
+          // SSE connection established
+          document.getElementById('rt-current-url').textContent = 'Connected — waiting for crawl to start...';
+
+        } else if (data.type === 'start') {
+          // Crawl has begun
+          document.getElementById('rt-current-url').textContent = data.message;
+          document.getElementById('rt-remaining').textContent = data.total_pages;
+
+        } else if (data.type === 'progress') {
+          // A new page was crawled — update all UI elements
+          const pct = data.percent;
+
+          // Update progress bar width
+          document.getElementById('rt-progress-fill').style.width = pct + '%';
+          document.getElementById('rt-percent').textContent = pct + '%';
+
+          // Update progress text and current URL
+          document.getElementById('rt-progress-text').textContent = data.message;
+          document.getElementById('rt-current-url').textContent = '🔍 Now crawling: ' + data.current_url;
+
+          // Update statistics
+          document.getElementById('rt-done').textContent       = data.done;
+          document.getElementById('rt-remaining').textContent  = data.total - data.done;
+          document.getElementById('rt-words-so-far').textContent = data.words_so_far.toLocaleString();
+          document.getElementById('rt-status-badge').textContent = '🔄';
+
+          // Update live word cloud with latest word frequencies
+          updateLiveWordCloud(data.top_words);
+
+        } else if (data.type === 'done') {
+          // Crawl is complete!
+          document.getElementById('rt-progress-fill').style.width = '100%';
+          document.getElementById('rt-percent').textContent = '100%';
+          document.getElementById('rt-progress-text').textContent = '✅ Crawl complete!';
+          document.getElementById('rt-current-url').textContent = 'All pages crawled successfully!';
+          document.getElementById('rt-status-badge').textContent = '✅';
+
+          // Show final results panel
+          showRtFinalResults(data);
+
+          // Save to history
+          saveToCrawlHistory(data, urls);
+
+          // Close the SSE stream
+          eventSource.close();
+          eventSource = null;
+
+          // Re-enable button
+          btn.disabled = false;
+          btn.classList.remove('loading');
+          btn.textContent = '⚡ Start Live Crawl';
+
+        } else if (data.type === 'ping') {
+          // Heartbeat ping — do nothing (keeps connection alive)
+        }
+
+      } catch(e) {
+        console.warn('SSE parse error:', e);
+      }
+    };
+
+    // Handle SSE connection errors
+    eventSource.onerror = function(err) {
+      console.warn('SSE error:', err);
+      // SSE might not be supported by this backend version — fall back to polling
+      if (eventSource) {
+        eventSource.close();
+        eventSource = null;
+      }
+      // Fall back to standard crawl if SSE fails
+      fallbackToStandardCrawl(urls, pages, topN, btn);
+    };
+
+  } catch(e) {
+    console.warn('SSE not available:', e);
+  }
+
+  // ── Step 2: Send the crawl request AFTER connecting to SSE stream ──────
+  // The backend will start crawling and send events to the stream
+  try {
+    const resp = await fetch(`${backendUrl}/crawl`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'ngrok-skip-browser-warning': 'true'
+      },
+      body: JSON.stringify({ urls, pages_per_site: pages, top_n: topN })
+    });
+
+    if (!resp.ok) throw new Error(await resp.text());
+
+    const ack = await resp.json();
+
+    // If the backend doesn't support SSE, fall back to standard crawl
+    if (ack.pages_crawled !== undefined) {
+      // Got full results — backend is not SSE-enabled (Part 9 style)
+      fallbackRenderRtResults(ack, urls, btn);
+    }
+    // If ack.status === 'started', SSE stream will handle the rest
+
+  } catch(e) {
+    console.warn('Crawl request error:', e);
+    if (eventSource) { eventSource.close(); eventSource = null; }
+    btn.disabled = false;
+    btn.classList.remove('loading');
+    btn.textContent = '⚡ Start Live Crawl';
+  }
+}
+
+
+// Update the live word cloud badges in real time
+function updateLiveWordCloud(topWords) {
+  const cloud = document.getElementById('rt-word-cloud');
+
+  // Clear and rebuild the word cloud with latest data
+  cloud.innerHTML = '';
+  topWords.forEach((item, i) => {
+    const word  = Array.isArray(item) ? item[0] : item.word;
+    const count = Array.isArray(item) ? item[1] : item.count;
+
+    const badge = document.createElement('div');
+    // Mark the first few as "new" for the pop animation
+    badge.className = 'word-badge' + (i < 3 ? ' live-new' : '');
+    badge.innerHTML = `${word} <span class="wcount">${count.toLocaleString()}</span>`;
+    cloud.appendChild(badge);
+  });
+}
+
+
+// Show the final results panel after real-time crawl completes
+function showRtFinalResults(data) {
+  document.getElementById('rt-final-results').style.display = 'block';
+  document.getElementById('rt-r-pages').textContent  = data.pages_crawled;
+  document.getElementById('rt-r-total').textContent  = data.total_words.toLocaleString();
+  document.getElementById('rt-r-unique').textContent = data.unique_words.toLocaleString();
+  document.getElementById('rt-r-sites').textContent  = data.sites_count || '—';
+
+  // Render final word cloud
+  const cloud = document.getElementById('rt-final-cloud');
+  cloud.innerHTML = '';
+  data.top_words.forEach(item => {
+    const word  = Array.isArray(item) ? item[0] : item.word;
+    const count = Array.isArray(item) ? item[1] : item.count;
+    const badge = document.createElement('div');
+    badge.className = 'word-badge';
+    badge.innerHTML = `${word} <span class="wcount">${count.toLocaleString()}</span>`;
+    cloud.appendChild(badge);
+  });
+
+  document.getElementById('rt-final-results').scrollIntoView({ behavior: 'smooth' });
+}
+
+
+// Fallback: if SSE not available, simulate progress then show results
+async function fallbackToStandardCrawl(urls, pages, topN, btn) {
+  // Simulate progress animation while we wait for the response
+  let fakeProgress = 0;
+  const fakeTimer = setInterval(() => {
+    fakeProgress = Math.min(fakeProgress + Math.random() * 8, 90);
+    document.getElementById('rt-progress-fill').style.width = fakeProgress + '%';
+    document.getElementById('rt-percent').textContent = Math.round(fakeProgress) + '%';
+  }, 400);
+
+  try {
+    const resp = await fetch(`${backendUrl}/crawl`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
+      body: JSON.stringify({ urls, pages_per_site: pages, top_n: topN })
+    });
+    const data = await resp.json();
+    clearInterval(fakeTimer);
+    fallbackRenderRtResults(data, urls, btn);
+  } catch(e) {
+    clearInterval(fakeTimer);
+    btn.disabled = false;
+    btn.classList.remove('loading');
+    btn.textContent = '⚡ Start Live Crawl';
+  }
+}
+
+function fallbackRenderRtResults(data, urls, btn) {
+  document.getElementById('rt-progress-fill').style.width = '100%';
+  document.getElementById('rt-percent').textContent = '100%';
+  document.getElementById('rt-progress-text').textContent = '✅ Done!';
+  document.getElementById('rt-done').textContent = data.pages_crawled || '—';
+  document.getElementById('rt-remaining').textContent = '0';
+  document.getElementById('rt-words-so-far').textContent = (data.total_words || 0).toLocaleString();
+  document.getElementById('rt-status-badge').textContent = '✅';
+  if (data.top_words) updateLiveWordCloud(data.top_words);
+  showRtFinalResults(data);
+  saveToCrawlHistory(data, urls);
+  btn.disabled = false;
+  btn.classList.remove('loading');
+  btn.textContent = '⚡ Start Live Crawl';
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════
+// SEARCH ENGINE (Section 3)
+// Builds an inverted index from crawled data and searches it
+// ══════════════════════════════════════════════════════════════════════════
+
+// Common English stop words to skip during indexing and search
+const STOP_WORDS = new Set([
+  'the','and','for','that','this','with','from','have','are','was','were',
+  'been','being','would','could','should','will','shall','may','might',
+  'also','one','two','three','get','got','use','used','us','much','many',
+  'very','just','more','some','than','then','when','what','who','how',
+  'its','all','any','can','had','has','him','his','her','our','their',
+  'they','them','you','your','not','but','only','about','into','over',
+  'out','most','other','does','did','said','each','which','she','into',
+  'now','way','even','well','like','look','make','know','take','see'
+]);
+
+// Build inverted index from the crawled data stored in crawlHistory
+// This enables searching across previously crawled pages
+function buildSearchIndex(pagesData) {
+  // pagesData: array of { url, top_words } from crawl history
+  searchIndex = {};
+
+  pagesData.forEach((page, pageId) => {
+    if (!page.top_words) return;
+
+    // Add each word from this page to the index
+    page.top_words.forEach(item => {
+      const word  = Array.isArray(item) ? item[0] : item.word;
+      const count = Array.isArray(item) ? item[1] : item.count;
+
+      if (!word || word.length < 3) return;
+
+      // Create index entry for this word if it doesn't exist
+      if (!searchIndex[word]) {
+        searchIndex[word] = [];
+      }
+
+      // Add this page to the word's list
+      searchIndex[word].push({ pageId, count, url: page.url });
+    });
+  });
+
+  console.log(`Search index built: ${Object.keys(searchIndex).length} terms indexed`);
+}
+
+
+// Handle clicking a suggestion chip
+function quickSearch(query) {
+  document.getElementById('search-input').value = query;
+  doSearch();
+}
+
+
+// Main search function: queries the index and ranks results
+function doSearch() {
+  const query = document.getElementById('search-input').value.trim().toLowerCase();
+  if (!query) return;
+
+  const resultsDiv = document.getElementById('search-results');
+
+  // ── Check if we have any indexed data ──────────────────────────────────
+  // Build index from crawl history if not built yet
+  if (crawlHistory.length > 0) {
+    // Build pages list from history
+    const pagesFromHistory = [];
+    crawlHistory.forEach(session => {
+      pagesFromHistory.push({
+        url: session.urls ? session.urls[0] : 'Crawled page',
+        top_words: session.top_words || []
+      });
+    });
+    buildSearchIndex(pagesFromHistory);
+  }
+
+  // If still no index, show helpful message
+  if (Object.keys(searchIndex).length === 0) {
+    resultsDiv.innerHTML = `
+      <div class="no-results">
+        <div style="font-size:32px;margin-bottom:12px;">⚠️</div>
+        No crawled data to search yet.<br>
+        <span style="font-size:12px;color:var(--text3);">Go to the Crawl tab and run a crawl first, then come back to search.</span>
+      </div>`;
+    return;
+  }
+
+  // ── Clean and split the query into individual words ─────────────────────
+  const queryWords = query.split(/\s+/)
+    .filter(w => w.length > 2 && !STOP_WORDS.has(w));
+
+  if (queryWords.length === 0) {
+    resultsDiv.innerHTML = `<div class="no-results">Query too general. Try a more specific word.</div>`;
+    return;
+  }
+
+  // ── Score each page using TF-IDF inspired scoring ────────────────────
+  const pageScores = {};
+  const totalDocs  = Object.keys(searchIndex).length || 1;
+
+  queryWords.forEach(queryWord => {
+    // Find all words in index that start with this query word (prefix match)
+    const matchingTerms = Object.keys(searchIndex).filter(term =>
+      term.includes(queryWord) || queryWord.includes(term)
+    );
+
+    matchingTerms.forEach(term => {
+      const pages = searchIndex[term];
+      // IDF: rarer words get higher score
+      const idf = Math.log(totalDocs / (pages.length + 1) + 1);
+
+      pages.forEach(match => {
+        const { pageId, count, url } = match;
+        // TF: higher count = higher score for this page
+        const tf = Math.log(count + 1);
+        const score = tf * idf;
+
+        if (!pageScores[pageId]) {
+          pageScores[pageId] = { score: 0, url, counts: {} };
+        }
+        pageScores[pageId].score += score;
+        pageScores[pageId].counts[term] = count;
+      });
+    });
+  });
+
+  // ── Sort pages by score (highest first) ──────────────────────────────
+  const ranked = Object.entries(pageScores)
+    .sort(([,a], [,b]) => b.score - a.score)
+    .slice(0, 8);  // Return top 8 results
+
+  if (ranked.length === 0) {
+    resultsDiv.innerHTML = `
+      <div class="no-results">
+        <div style="font-size:32px;margin-bottom:12px;">🔍</div>
+        No results found for "<strong>${query}</strong>".<br>
+        <span style="font-size:12px;color:var(--text3);">Try different words, or crawl more pages first.</span>
+      </div>`;
+    return;
+  }
+
+  // ── Render search results ─────────────────────────────────────────────
+  let html = `<div style="font-size:13px;color:var(--text2);margin-bottom:16px;font-family:var(--mono);">
+    Found ${ranked.length} result(s) for "<strong style="color:var(--text);">${query}</strong>"
+  </div>`;
+
+  ranked.forEach(([pageId, data], i) => {
+    const rank = i + 1;
+    // Build a snippet showing matched words and their counts
+    const matchedWords = Object.entries(data.counts)
+      .sort(([,a],[,b]) => b - a)
+      .slice(0, 5)
+      .map(([w, c]) => `<mark>${w}</mark> (${c}x)`)
+      .join(' &nbsp; ');
+
+    html += `
+      <div class="search-result">
+        <div class="result-rank">${rank}</div>
+        <div class="result-url">${data.url}</div>
+        <div class="result-snippet">
+          Matched terms: ${matchedWords}
+        </div>
+        <div class="result-score">Relevance score: ${data.score.toFixed(3)}</div>
+      </div>`;
+  });
+
+  resultsDiv.innerHTML = html;
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════
+// CRAWL HISTORY (Section 4)
+// Records every crawl session and displays trends
+// ══════════════════════════════════════════════════════════════════════════
+
+// Save a completed crawl session to the history array
+function saveToCrawlHistory(data, urls) {
+  const entry = {
+    timestamp   : new Date().toLocaleString(),    // When this crawl happened
+    urls        : urls,                           // Which URLs were crawled
+    pages_crawled: data.pages_crawled || 0,
+    total_words  : data.total_words   || 0,
+    unique_words : data.unique_words  || 0,
+    sites_count  : data.sites_count   || urls.length,
+    top_words    : (data.top_words || []).map(w => Array.isArray(w) ? {word: w[0], count: w[1]} : w)  // normalize format
+  };
+
+  // Add to history array
+  crawlHistory.unshift(entry);  // Add to beginning so newest is first
+
+  // Rebuild search index with all data
+  if (crawlHistory.length > 0) {
+    const pages = crawlHistory.map((s, i) => ({
+      url: s.urls[0] || `Session ${i+1}`,
+      top_words: s.top_words
+    }));
+    buildSearchIndex(pages);
+  }
+
+  console.log(`History saved. Total sessions: ${crawlHistory.length}`);
+  maybeSendEmailAlert(data, urls);
+  refreshReportStats();
+}
+
+
+// Load and display crawl history
+function loadHistory() {
+  const contentDiv = document.getElementById('history-content');
+  const countSpan  = document.getElementById('history-count');
+
+  countSpan.textContent = `${crawlHistory.length} session(s) recorded`;
+
+  if (crawlHistory.length === 0) {
+    contentDiv.innerHTML = `
+      <div class="no-results">
+        <div style="font-size:32px;margin-bottom:12px;">📋</div>
+        No crawl history yet.<br>
+        <span style="font-size:12px;color:var(--text3);">Run a crawl first — it will automatically appear here.</span>
+      </div>`;
+    document.getElementById('history-chart-section').style.display = 'none';
+    return;
+  }
+
+  // Build the history table
+  let html = `
+    <table class="history-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Timestamp</th>
+          <th>Sites</th>
+          <th>Pages</th>
+          <th>Total Words</th>
+          <th>Unique Words</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>`;
+
+  crawlHistory.forEach((entry, i) => {
+    html += `
+      <tr>
+        <td>${crawlHistory.length - i}</td>
+        <td>${entry.timestamp}</td>
+        <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+          ${entry.urls ? entry.urls.join(', ') : '—'}
+        </td>
+        <td>${entry.pages_crawled}</td>
+        <td>${entry.total_words.toLocaleString()}</td>
+        <td>${entry.unique_words.toLocaleString()}</td>
+        <td><span class="badge badge-green">✓ Done</span></td>
+      </tr>`;
+  });
+
+  html += '</tbody></table>';
+  contentDiv.innerHTML = html;
+
+  // Show trend chart if we have 2+ sessions
+  if (crawlHistory.length >= 2) {
+    document.getElementById('history-chart-section').style.display = 'block';
+    drawHistoryChart();
+  } else {
+    document.getElementById('history-chart-section').style.display = 'none';
+  }
+}
+
+
+// Draw the trend line chart for word counts over time
+function drawHistoryChart() {
+  // Reverse history so oldest is first on the X axis
+  const ordered = [...crawlHistory].reverse();
+
+  const labels      = ordered.map((e, i) => `Session ${i+1}`);
+  const totalWords  = ordered.map(e => e.total_words);
+  const uniqueWords = ordered.map(e => e.unique_words);
+
+  if (historyChart) historyChart.destroy();
+
+  historyChart = new Chart(document.getElementById('historyChart'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Total Words',
+          data: totalWords,
+          borderColor: '#4f46e5',
+          backgroundColor: 'rgba(79,70,229,0.08)',
+          borderWidth: 2,
+          pointRadius: 5,
+          fill: true,
+          tension: 0.3
+        },
+        {
+          label: 'Unique Words',
+          data: uniqueWords,
+          borderColor: '#10b981',
+          backgroundColor: 'rgba(16,185,129,0.06)',
+          borderWidth: 2,
+          pointRadius: 5,
+          fill: true,
+          tension: 0.3
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          labels: { color: '#6b7280', font: { family: 'Inter', size: 12 } }
+        }
+      },
+      scales: {
+        x: {
+          ticks: { color: '#6b7280', font: { family: 'JetBrains Mono', size: 11 } },
+          grid: { color: 'rgba(0,0,0,0.05)' }
+        },
+        y: {
+          ticks: { color: '#6b7280', font: { family: 'JetBrains Mono', size: 11 } },
+          grid: { color: 'rgba(0,0,0,0.05)' }
+        }
+      }
+    }
+  });
+}
+
+
+// Clear all history records
+function clearHistory() {
+  if (crawlHistory.length === 0) return;
+  if (!confirm('Clear all crawl history for this session? This cannot be undone.')) return;
+  crawlHistory = [];
+  searchIndex  = {};
+  loadHistory();
+}
+
+
+
+
+// ══════════════════════════════════════════════════════════════════════════
+// EMAIL ALERT SETTINGS
+// ══════════════════════════════════════════════════════════════════════════
+
+let emailAlertSettings = { email: '', enabled: 'yes' };
+
+function saveEmailSettings() {
+  emailAlertSettings.email   = document.getElementById('alert-email').value.trim();
+  emailAlertSettings.enabled = document.getElementById('alert-enabled').value;
+  const status = document.getElementById('email-save-status');
+  status.style.display = 'inline';
+  setTimeout(() => status.style.display = 'none', 2500);
+}
+
+async function sendTestEmail() {
+  const statusEl = document.getElementById('test-email-status');
+  if (!backendUrl) {
+    statusEl.textContent = '⚠️ Connect backend first';
+    statusEl.style.color = 'var(--warning)';
+    return;
+  }
+  const email = document.getElementById('alert-email').value.trim();
+  if (!email) {
+    statusEl.textContent = '⚠️ Enter an email address first';
+    statusEl.style.color = 'var(--warning)';
+    return;
+  }
+  statusEl.textContent = '📨 Sending...';
+  statusEl.style.color = 'var(--text2)';
+  try {
+    const resp = await fetch(`${backendUrl}/send_email`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'ngrok-skip-browser-warning': 'true',
+        'Access-Control-Allow-Origin': '*'
+      },
+      body: JSON.stringify({ email, subject: 'WebCrawlr Test Alert', test: true })
+    });
+    if (!resp.ok) {
+      const txt = await resp.text().catch(()=>'');
+      throw new Error(`Server error ${resp.status}${txt?' — '+txt.slice(0,80):''}`);
+    }
+    const data = await resp.json();
+    if (data.success) {
+      statusEl.textContent = '✅ Test email sent! Check your inbox.';
+      statusEl.style.color = 'var(--success)';
+    } else {
+      statusEl.textContent = '❌ ' + (data.error || 'Failed — check Colab email config');
+      statusEl.style.color = 'var(--danger)';
+    }
+  } catch(e) {
+    if (e.message.includes('Failed to fetch') || e.message.includes('NetworkError') || e.message.includes('CORS')) {
+      statusEl.innerHTML = '❌ CORS/Network error — make sure your Colab Cell 33 is running and ngrok URL is correct.<br><span style="font-size:11px;color:var(--text3);">Tip: Re-run Cell 33 and paste the new URL above.</span>';
+    } else {
+      statusEl.textContent = '❌ ' + e.message;
+    }
+    statusEl.style.color = 'var(--danger)';
+  }
+}
+
+// Called automatically after each crawl if email alerts are enabled
+async function maybeSendEmailAlert(crawlData, urls) {
+  if (emailAlertSettings.enabled !== 'yes') return;
+  if (!emailAlertSettings.email) return;
+  if (!backendUrl) return;
+  try {
+    await fetch(`${backendUrl}/send_email`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
+      body: JSON.stringify({
+        email       : emailAlertSettings.email,
+        subject     : 'WebCrawlr — Crawl Complete!',
+        pages_crawled: crawlData.pages_crawled,
+        total_words  : crawlData.total_words,
+        unique_words : crawlData.unique_words,
+        top_words    : crawlData.top_words ? crawlData.top_words.slice(0,10) : [],
+        urls,
+        timestamp    : new Date().toLocaleString()
+      })
+    });
+    log('Email alert sent to ' + emailAlertSettings.email, 'ok');
+  } catch(e) {
+    log('Email alert skipped: ' + e.message, 'warn');
+  }
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════
+// PDF REPORT GENERATION (client-side, no backend needed)
+// ══════════════════════════════════════════════════════════════════════════
+
+function refreshReportStats() {
+  const totalPages = crawlHistory.reduce((s, e) => s + (e.pages_crawled || 0), 0);
+  const totalWords = crawlHistory.reduce((s, e) => s + (e.total_words  || 0), 0);
+  document.getElementById('rep-sessions').textContent = crawlHistory.length;
+  document.getElementById('rep-pages').textContent    = totalPages;
+  document.getElementById('rep-words').textContent    = totalWords.toLocaleString();
+}
+
+function generatePDFReport() {
+  const statusEl = document.getElementById('pdf-status');
+  if (crawlHistory.length === 0) {
+    statusEl.textContent = '⚠️ No crawl data yet. Run a crawl first.';
+    return;
+  }
+  statusEl.textContent = '⏳ Generating full report PDF...';
+
+  try {
+    const { jsPDF } = window.jspdf;
+    const doc  = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const pageW = 210, pageH = 297;
+    const M = 10;   // left/right margin
+    let y = 20;
+    let currentPage = 1;
+
+    // ── Colour palette (matches Python notebook) ──────────────────────────
+    const PURPLE     = [75,   0, 130];
+    const DARK_BG    = [15,  15,  30];
+    const BADGE      = [90,  20, 160];
+    const TEAL       = [0,  168, 150];
+    const DARK_GREY  = [45,  45,  60];
+    const MID_GREY   = [120,120,140];
+    const LIGHT_GREY = [245,243,252];
+    const WHITE      = [255,255,255];
+    const PINK       = [220, 50,130];
+    const CYAN       = [0,  190,200];
+    const GREEN      = [20, 155, 75];
+    const INDIGO     = [63,  56,210];
+    const AMBER      = [180,120,  0];
+    const ORANGE     = [200, 90,  0];
+
+    const today      = new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
+    const todayFull  = new Date().toLocaleString();
+
+    // ── Helper: running header/footer on non-cover pages ──────────────────
+    function drawHeaderFooter(pageNum, totalPages) {
+      // header bar
+      doc.setFillColor(...DARK_BG);
+      doc.rect(0, 0, pageW, 14, 'F');
+      doc.setFillColor(...TEAL);
+      doc.rect(0, 0, 5, 14, 'F');
+      doc.setFont('helvetica','bold'); doc.setFontSize(8.5);
+      doc.setTextColor(...WHITE);
+      doc.text('Distributed Web Crawler  -  Project Report', 8, 9);
+      doc.setFont('helvetica','normal'); doc.setFontSize(7.5);
+      doc.setTextColor(100,175,255);
+      doc.text('Dask  |  BeautifulSoup4  |  NLTK  |  Matplotlib', 200, 9, {align:'right'});
+      // dots
+      [[220,50,130],[255,185,0],[0,200,175]].forEach((c,i)=>{
+        doc.setFillColor(...c);
+        doc.ellipse(201-i*7,5,4,4,'F');
+      });
+      // footer bar
+      doc.setFillColor(...DARK_BG);
+      doc.rect(0, pageH-12, pageW, 12, 'F');
+      doc.setFont('helvetica','normal'); doc.setFontSize(7);
+      doc.setTextColor(150,150,170);
+      doc.text(`Generated: ${todayFull}    Distributed Web Crawler Project`, M, pageH-4);
+      doc.setFont('helvetica','bold'); doc.setFontSize(8);
+      doc.setTextColor(...PINK);
+      doc.text(`Page ${pageNum}`, pageW-M, pageH-4, {align:'right'});
+    }
+
+    // ── Helper: add new page with header/footer ────────────────────────────
+    function newPage() {
+      doc.addPage();
+      currentPage++;
+      drawHeaderFooter(currentPage, 99);
+      y = 20;
+    }
+
+    // ── Helper: check space, add page if needed ────────────────────────────
+    function chk(h=30) {
+      if (y + h > pageH - 16) newPage();
+    }
+
+    // ── Helper: section title bar ─────────────────────────────────────────
+    function sectionTitle(num, title) {
+      chk(20);
+      y += 2;
+      doc.setFillColor(...BADGE);
+      doc.rect(M, y, 10, 9, 'F');
+      doc.setFont('helvetica','bold'); doc.setFontSize(9);
+      doc.setTextColor(...WHITE);
+      doc.text(String(num), M+5, y+6.5, {align:'center'});
+      doc.setFont('helvetica','bold'); doc.setFontSize(13);
+      doc.setTextColor(...PURPLE);
+      doc.text(title, 22, y+7);
+      y += 9;
+      doc.setDrawColor(190,160,235);
+      doc.line(M, y, pageW-M, y);
+      y += 5;
+    }
+
+    // ── Helper: sub heading ───────────────────────────────────────────────
+    function subHeading(title, color=TEAL) {
+      chk(10); y += 1;
+      doc.setFillColor(...color);
+      doc.rect(M, y, 3, 7, 'F');
+      doc.setFont('helvetica','bold'); doc.setFontSize(10);
+      doc.setTextColor(...DARK_GREY);
+      doc.text(title, 16, y+5.5);
+      y += 10;
+    }
+
+    // ── Helper: body text ─────────────────────────────────────────────────
+    function bodyText(text) {
+      doc.setFont('helvetica','normal'); doc.setFontSize(10);
+      doc.setTextColor(...DARK_GREY);
+      const lines = doc.splitTextToSize(text, pageW - M*2);
+      lines.forEach(l => { chk(6); doc.text(l, M, y); y += 5.5; });
+      y += 1;
+    }
+
+    // ── Helper: info box ─────────────────────────────────────────────────
+    function infoBox(lines, borderCol=PURPLE) {
+      const h = lines.length * 6.5 + 8;
+      chk(h+4);
+      doc.setFillColor(...LIGHT_GREY);
+      doc.setDrawColor(...borderCol);
+      doc.rect(M, y, pageW-M*2, h, 'DF');
+      doc.setFillColor(...borderCol);
+      doc.rect(M, y, 4, h, 'F');
+      doc.setFont('helvetica','normal'); doc.setFontSize(9);
+      doc.setTextColor(...DARK_GREY);
+      let iy = y + 4;
+      lines.forEach(l => {
+        const wrapped = doc.splitTextToSize(l, pageW-M*2-10);
+        wrapped.forEach(wl => { doc.text(wl, M+7, iy); iy += 6.5; });
+      });
+      y = iy + 3;
+    }
+
+    // ── Helper: stat tiles row ────────────────────────────────────────────
+    function statTiles(tiles) {
+      chk(28);
+      const tw = (pageW - M*2 - (tiles.length-1)*3) / tiles.length;
+      tiles.forEach((t,i) => {
+        const tx = M + i*(tw+3);
+        doc.setFillColor(35,0,75);
+        doc.rect(tx+1.5, y+1.5, tw, 22, 'F');
+        doc.setFillColor(...BADGE);
+        doc.rect(tx, y, tw, 22, 'F');
+        doc.setFont('helvetica','bold'); doc.setFontSize(16);
+        doc.setTextColor(...WHITE);
+        doc.text(String(t[0]), tx+tw/2, y+10, {align:'center'});
+        doc.setFont('helvetica','normal'); doc.setFontSize(6.5);
+        doc.setTextColor(215,185,255);
+        t[1].split('\n').forEach((ln,j) => {
+          doc.text(ln, tx+tw/2, y+14+j*4.5, {align:'center'});
+        });
+      });
+      y += 26;
+    }
+
+    // ── Helper: feature card ─────────────────────────────────────────────
+    function featureCard(title, body, color=TEAL) {
+      const blines = doc.splitTextToSize(body, pageW-M*2-12);
+      const cardH = 13 + blines.length*5.5 + 4;
+      chk(cardH+2);
+      doc.setFillColor(...LIGHT_GREY);
+      doc.rect(M, y, pageW-M*2, cardH, 'F');
+      doc.setFillColor(...color);
+      doc.rect(M, y, 4, cardH, 'F');
+      doc.setFont('helvetica','bold'); doc.setFontSize(10);
+      doc.setTextColor(...PURPLE);
+      doc.text(title, M+7, y+8);
+      doc.setFont('helvetica','normal'); doc.setFontSize(9);
+      doc.setTextColor(...DARK_GREY);
+      blines.forEach((l,i) => doc.text(l, M+7, y+14+i*5.5));
+      y += cardH + 3;
+    }
+
+    // ── Helper: word frequency table ─────────────────────────────────────
+    function wordTable(rows, barColor=PINK) {
+      const cw = [14, 74, 26, 76];
+      chk(rows.length*7+14);
+      // Header
+      doc.setFillColor(...PURPLE);
+      doc.setTextColor(...WHITE);
+      doc.setFont('helvetica','bold'); doc.setFontSize(9);
+      let hx = M;
+      ['#','Word','Count','Frequency'].forEach((h,i)=>{
+        doc.rect(hx, y, cw[i], 7.5, 'F');
+        doc.text(h, hx+cw[i]/2, y+5.5, {align:'center'});
+        hx += cw[i];
+      });
+      y += 7.5;
+      const maxC = Math.max(...rows.map(r=>r[2]),1);
+      rows.forEach((row,i)=>{
+        chk(7);
+        const bg = i%2===0 ? [245,240,255] : [255,255,255];
+        let rx = M;
+        doc.setFillColor(...bg);
+        cw.forEach(w => { doc.rect(rx,y,w,6.5,'F'); rx+=w; });
+        doc.setTextColor(...DARK_GREY);
+        doc.setFont('helvetica', i===0?'bold':'normal'); doc.setFontSize(9);
+        rx = M;
+        [String(row[0]), String(row[1]), String(row[2])].forEach((v,j)=>{
+          const align = j===1 ? 'left' : 'center';
+          doc.text(v, j===1 ? rx+2 : rx+cw[j]/2, y+4.5, {align});
+          rx += cw[j];
+        });
+        // Bar
+        const bw = Math.max(2, Math.round((cw[3]-6) * row[2]/maxC));
+        doc.setFillColor(...barColor);
+        doc.rect(rx+2, y+2, bw, 3, 'F');
+        y += 6.5;
+      });
+      y += 3;
+    }
+
+    // ── Helper: TF-IDF table ─────────────────────────────────────────────
+    function tfidfTable(rows) {
+      const cw = [12,52,28,28,32,38];
+      const hdrs = ['#','Word','TF','IDF','TF-IDF','Importance'];
+      chk(rows.length*7+14);
+      doc.setFillColor(...INDIGO);
+      doc.setTextColor(...WHITE);
+      doc.setFont('helvetica','bold'); doc.setFontSize(8.5);
+      let hx=M;
+      hdrs.forEach((h,i)=>{ doc.rect(hx,y,cw[i],7.5,'F'); doc.text(h,hx+cw[i]/2,y+5.5,{align:'center'}); hx+=cw[i]; });
+      y+=7.5;
+      const maxS = Math.max(...rows.map(r=>r[4]),1);
+      rows.forEach((row,i)=>{
+        chk(7);
+        const bg = i%2===0?[240,240,255]:[255,255,255];
+        let rx=M;
+        doc.setFillColor(...bg);
+        cw.forEach(w=>{doc.rect(rx,y,w,6.5,'F');rx+=w;});
+        doc.setTextColor(...DARK_GREY);
+        doc.setFont('helvetica',i<3?'bold':'normal'); doc.setFontSize(8.5);
+        rx=M;
+        [String(row[0]),String(row[1]),row[2].toFixed(3),row[3].toFixed(3),row[4].toFixed(3)].forEach((v,j)=>{
+          doc.text(v, j===1?rx+2:rx+cw[j]/2, y+4.5, {align:j===1?'left':'center'});
+          rx+=cw[j];
+        });
+        const bw=Math.max(2,Math.round((cw[5]-4)*row[4]/maxS));
+        doc.setFillColor(...INDIGO);
+        doc.rect(rx+2,y+2,bw,3,'F');
+        y+=6.5;
+      });
+      y+=3;
+    }
+
+    // ── Helper: sentiment bar ────────────────────────────────────────────
+    function sentimentBar(label, pos, neg, neu) {
+      chk(14);
+      const bw=130, bx=65, bh=8;
+      const total=pos+neg+neu||1;
+      doc.setFont('helvetica','bold'); doc.setFontSize(9);
+      doc.setTextColor(...DARK_GREY);
+      doc.text(label, 63, y+6, {align:'right'});
+      doc.setFillColor(230,230,240); doc.rect(bx,y,bw,bh,'F');
+      const pw=Math.round(bw*pos/total);
+      const nw=Math.round(bw*neu/total);
+      const ngw=Math.round(bw*neg/total);
+      doc.setFillColor(...GREEN); doc.rect(bx,y,pw,bh,'F');
+      doc.setFillColor(150,150,170); doc.rect(bx+pw,y,nw,bh,'F');
+      doc.setFillColor(...PINK); doc.rect(bx+pw+nw,y,ngw,bh,'F');
+      doc.setFont('helvetica','normal'); doc.setFontSize(7);
+      doc.setTextColor(...DARK_GREY);
+      doc.text(`Pos ${pos}  Neu ${neu}  Neg ${neg}`, bx+bw+4, y+6);
+      y+=12;
+    }
+
+    // ── Helper: step flow ────────────────────────────────────────────────
+    function stepFlow(steps, color=TEAL) {
+      chk(28);
+      const sw=Math.floor((pageW-M*2)/steps.length);
+      steps.forEach((s,i)=>{
+        const sx=M+i*sw;
+        const bg = i%2===0 ? color : color.map(c=>Math.max(0,c-30));
+        doc.setFillColor(...bg); doc.rect(sx,y,sw-1,22,'F');
+        doc.setFillColor(...WHITE); doc.ellipse(sx+sw/2-4,y+1.5,8,8,'F');
+        doc.setFont('helvetica','bold'); doc.setFontSize(8);
+        doc.setTextColor(...color);
+        doc.text(String(i+1), sx+sw/2, y+7, {align:'center'});
+        doc.setFont('helvetica','normal'); doc.setFontSize(6.5);
+        doc.setTextColor(...WHITE);
+        s[1].split('\n').forEach((ln,j)=>doc.text(ln,sx+sw/2,y+14+j*4,{align:'center'}));
+      });
+      y+=26;
+    }
+
+    // ── Helper: two-column cards ─────────────────────────────────────────
+    function twoCol(items, th=28, colors=[BADGE,TEAL,INDIGO,ORANGE,[140,0,90],[0,100,80]]) {
+      const tw=92, gap=6;
+      const rows=Math.ceil(items.length/2);
+      chk(rows*(th+gap)+8);
+      const y0=y;
+      items.forEach((item,i)=>{
+        const cx=M+(i%2)*(tw+gap);
+        const cy=y0+Math.floor(i/2)*(th+gap);
+        const col=colors[i%colors.length];
+        doc.setFillColor(...col); doc.rect(cx,cy,tw,th,'F');
+        doc.setFont('helvetica','bold'); doc.setFontSize(9);
+        doc.setTextColor(...WHITE);
+        doc.text(item[0], cx+3, cy+9);
+        doc.setFont('helvetica','normal'); doc.setFontSize(7.5);
+        doc.setTextColor(230,215,255);
+        const dlines=doc.splitTextToSize(item[1],tw-6);
+        dlines.forEach((l,j)=>doc.text(l,cx+3,cy+16+j*5));
+      });
+      y=y0+rows*(th+gap)+2;
+    }
+
+    // ── Helper: arch row ────────────────────────────────────────────────
+    function archRow(boxes) {
+      const bw=56,bh=28,gap=6;
+      chk(bh+10);
+      const cols=[BADGE,TEAL,[140,0,80]];
+      boxes.forEach((box,i)=>{
+        const bx=M+i*(bw+gap);
+        doc.setFillColor(...cols[i%cols.length]); doc.rect(bx,y,bw,bh,'F');
+        doc.setFont('helvetica','bold'); doc.setFontSize(9);
+        doc.setTextColor(...WHITE);
+        doc.text(box[0], bx+bw/2, y+9, {align:'center'});
+        doc.setFont('helvetica','normal'); doc.setFontSize(7);
+        doc.setTextColor(220,220,235);
+        box[1].forEach((l,j)=>doc.text(l,bx+bw/2,y+16+j*5,{align:'center'}));
+        if(i<boxes.length-1){
+          const ax=bx+bw+1;
+          doc.setDrawColor(...TEAL); doc.setLineWidth(0.8);
+          doc.line(ax,y+bh/2,ax+gap-1,y+bh/2);
+          doc.setLineWidth(0.2);
+        }
+      });
+      y+=bh+8;
+    }
+
+    // ── Compute data from crawl history ──────────────────────────────────
+    const totalPages = crawlHistory.reduce((s,e)=>s+(e.pages_crawled||0),0);
+    const totalWords = crawlHistory.reduce((s,e)=>s+(e.total_words||0),0);
+    const totalUniq  = crawlHistory.reduce((s,e)=>s+(e.unique_words||0),0);
+
+    // Aggregate all top words across sessions
+    const allWordMap = {};
+    crawlHistory.forEach(s=>{
+      (s.top_words||[]).forEach(w=>{
+        const word  = Array.isArray(w)?w[0]:w.word;
+        const count = Array.isArray(w)?w[1]:w.count;
+        allWordMap[word]=(allWordMap[word]||0)+count;
+      });
+    });
+    const allWordsSorted = Object.entries(allWordMap).sort(([,a],[,b])=>b-a);
+
+    // Split into two "sites" if we have 2+ sessions (for comparison)
+    const sess0 = crawlHistory[crawlHistory.length-1] || {};
+    const sess1 = crawlHistory.length>1 ? crawlHistory[crawlHistory.length-2] : null;
+    const top50a = (sess0.top_words||[]).slice(0,50).map(w=>Array.isArray(w)?w:[w.word,w.count]);
+    const top50b = sess1 ? (sess1.top_words||[]).slice(0,50).map(w=>Array.isArray(w)?w:[w.word,w.count]) : [];
+
+    // Common words
+    const setA=new Set(top50a.map(w=>w[0]));
+    const setB=new Set(top50b.map(w=>w[0]));
+    const commonWords=[...setA].filter(w=>setB.has(w));
+
+    // TF-IDF
+    function computeTFIDF(top50Primary, top50Other) {
+      const mapB=Object.fromEntries(top50Other.map(w=>[w[0],w[1]]));
+      const totalA=top50Primary.reduce((s,w)=>s+w[1],0)||1;
+      return top50Primary.slice(0,10).map((w,i)=>{
+        const tf=w[1]/totalA;
+        const df=1+(mapB[w[0]]?1:0);
+        const idf=Math.log(2/df+1);
+        return [i+1,w[0],parseFloat(tf.toFixed(4)),parseFloat(idf.toFixed(4)),parseFloat((tf*idf).toFixed(4))];
+      });
+    }
+    const tfidf_a=computeTFIDF(top50a,top50b);
+    const tfidf_b=top50b.length?computeTFIDF(top50b,top50a):[];
+
+    // Sentiment
+    const POS_WORDS=new Set(['love','hope','dream','inspire','great','wonderful','beautiful','happy','joy','life','freedom','smile','kind','best','brilliant','amazing','friend','light','truth','heart','good','wise','laugh']);
+    const NEG_WORDS=new Set(['hate','fear','pain','dark','death','bad','evil','worst','angry','sad','alone','cold','wrong','fail','false','lost','ugly','danger']);
+    function sentCounts(top50){
+      let p=0,n=0,total=0;
+      top50.forEach(w=>{p+=(POS_WORDS.has(w[0])?w[1]:0);n+=(NEG_WORDS.has(w[0])?w[1]:0);total+=w[1];});
+      return [p,n,Math.max(0,total-p-n)];
+    }
+    const [aPosC,aNegC,aNeuC]=sentCounts(top50a);
+    const [bPosC,bNegC,bNeuC]=sentCounts(top50b);
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  COVER PAGE
+    // ═══════════════════════════════════════════════════════════════════
+    doc.setFillColor(...DARK_BG); doc.rect(0,0,pageW,pageH,'F');
+    doc.setFillColor(...TEAL);    doc.rect(0,0,6,pageH,'F');
+    doc.setFillColor(...BADGE);   doc.rect(204,0,6,pageH,'F');
+
+    // Decorative circles
+    [[22,PINK],[44,[255,185,0]],[66,CYAN]].forEach(([yd,col])=>{
+      doc.setFillColor(...col); doc.ellipse(148,yd,42,42,'F');
+      doc.setFillColor(...DARK_BG); doc.ellipse(155,yd+7,28,28,'F');
+    });
+
+    // Date
+    doc.setFont('helvetica','normal'); doc.setFontSize(8);
+    doc.setTextColor(110,110,160);
+    doc.text(`Generated: ${today}`, 200, 8, {align:'right'});
+
+    // Members box
+    doc.setFillColor(25,20,50); doc.rect(8,18,130,36,'F');
+    doc.setFillColor(...TEAL);  doc.rect(8,18,3,36,'F');
+    doc.setFont('helvetica','bold'); doc.setFontSize(7.5);
+    doc.setTextColor(...TEAL);
+    doc.text('GROUP MEMBERS', 14, 24);
+    [['Fatima Kalsoom','032'],['Kiran Siddique','052'],['Saba Gull','074']].forEach(([n,r],i)=>{
+      doc.setFont('helvetica','bold'); doc.setFontSize(8); doc.setTextColor(...WHITE);
+      doc.text(n, 14, 32+i*7.5);
+      doc.setFont('helvetica','normal'); doc.setTextColor(180,160,230);
+      doc.text(`(${r})`, 80, 32+i*7.5);
+    });
+
+    // Instructor box
+    doc.setFillColor(20,40,35); doc.rect(8,57,130,16,'F');
+    doc.setFillColor(...PINK);  doc.rect(8,57,3,16,'F');
+    doc.setFont('helvetica','bold'); doc.setFontSize(7.5); doc.setTextColor(...PINK);
+    doc.text('COURSE INSTRUCTOR', 14, 63);
+    doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(...WHITE);
+    doc.text('Mam Madiha Wahid', 14, 70);
+
+    // Title
+    doc.setFont('helvetica','bold'); doc.setFontSize(30); doc.setTextColor(...WHITE);
+    doc.text('Distributed Web Crawler', pageW/2, 98, {align:'center'});
+    doc.setFont('helvetica','normal'); doc.setFontSize(14); doc.setTextColor(185,155,255);
+    doc.text('Project Report', pageW/2, 108, {align:'center'});
+    doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(110,110,155);
+    doc.text('Python  |  Dask  |  BeautifulSoup4  |  NLTK  |  Matplotlib  |  FPDF2', pageW/2, 117, {align:'center'});
+
+    // Stat tiles on cover
+    y=125;
+    statTiles([
+      [String(totalPages),    'Pages\nCrawled'],
+      [String(crawlHistory.length), 'Crawl\nSessions'],
+      [String(top50a.length), 'Top Words\nLatest Session'],
+      [String(commonWords.length), 'Common\nWords'],
+      [String(totalUniq), 'Unique\nWords Total'],
+    ]);
+
+    // Tech badges
+    y=183;
+    let bx2=16;
+    [['Dask',BADGE],['BeautifulSoup4',TEAL],['NLTK',[155,0,75]],['Matplotlib',[0,80,165]],['Seaborn',[0,120,90]],['FPDF2',[100,40,140]],['Pandas',[0,100,80]]].forEach(([label,bg])=>{
+      const bw2=label.length*2.9+8;
+      doc.setFillColor(...bg); doc.rect(bx2,y,bw2,8,'F');
+      doc.setFont('helvetica','bold'); doc.setFontSize(7); doc.setTextColor(...WHITE);
+      doc.text(label,bx2+bw2/2,y+5.5,{align:'center'});
+      bx2+=bw2+3;
+    });
+
+    // Table of Contents
+    y=198;
+    doc.setFont('helvetica','bold'); doc.setFontSize(9.5); doc.setTextColor(...TEAL);
+    doc.text('Table of Contents', 20, y); y+=5;
+    doc.setDrawColor(...TEAL); doc.line(20,y,192,y); y+=4;
+    [['1','Introduction'],['2','System Architecture'],['3','Crawling Results'],
+     ['4','Top Words — Latest Session'],['5','Common Words Analysis'],
+     ['6','Email Alerts System'],['7','Crawl History & Session Trends'],
+     ['8','Sentiment Analysis'],['9','TF-IDF Search Engine'],
+     ['10','Comparison Analysis'],['11','Session History Log'],['12','Conclusion & Key Findings']
+    ].forEach(([sec,ttl])=>{
+      doc.setFillColor(28,18,55);
+      doc.setFont('helvetica','bold'); doc.setFontSize(7.5); doc.setTextColor(0,200,175);
+      doc.rect(20,y,15,6,'F'); doc.text(sec,27,y+4.5,{align:'center'});
+      doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(200,190,230);
+      doc.rect(35,y,162,6,'F'); doc.text('  '+ttl,37,y+4.5);
+      y+=6;
+    });
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  PAGE 2 — SECTIONS 1 & 2
+    // ═══════════════════════════════════════════════════════════════════
+    newPage();
+
+    sectionTitle('1','Introduction');
+    bodyText('This project implements a Distributed Web Crawler using Dask for parallel processing, BeautifulSoup4 for HTML parsing, and NLTK for text analysis. The crawler visits multiple web pages simultaneously using Dask Bags, extracts clean text, and performs word frequency analysis to compare vocabulary across different websites.');
+    bodyText('Two target sites were chosen: quotes.toscrape.com (a literary quotes site) and books.toscrape.com (an online bookstore catalogue). Five pages of each site were crawled, giving a total of 10 pages and a representative vocabulary sample from each domain. Advanced features include a real-time dashboard, TF-IDF search engine, sentiment analysis, email alert notifications, and full crawl history tracking.');
+    featureCard('Why Dask?','A standard for loop crawls one URL at a time. Dask Bags parallelise the work across multiple CPU cores, reducing crawl time significantly with almost no extra code.',TEAL);
+
+    y+=2;
+    let bx3=M;
+    [['Dask',BADGE],['BeautifulSoup4',TEAL],['NLTK',[155,0,75]],['Matplotlib',[0,80,165]],['Pandas',[0,100,80]],['FPDF2',[100,40,140]]].forEach(([label,bg])=>{
+      const bw3=label.length*2.9+8;
+      doc.setFillColor(...bg); doc.rect(bx3,y,bw3,7,'F');
+      doc.setFont('helvetica','bold'); doc.setFontSize(7); doc.setTextColor(...WHITE);
+      doc.text(label,bx3+bw3/2,y+5,{align:'center'});
+      bx3+=bw3+3;
+    });
+    y+=12;
+
+    sectionTitle('2','System Architecture');
+    bodyText('The pipeline runs in four stages:');
+    archRow([
+      ['Crawler',   ['requests + BeautifulSoup','Dask Bag distributes','URLs across workers']],
+      ['Cleaner',   ['NLTK stop words','Regex noise removal','Short word filter']],
+      ['Analyser',  ['Dask .frequencies()','Pandas DataFrames','Word counts + ranks']],
+    ]);
+    doc.setFillColor(...LIGHT_GREY); doc.setDrawColor(...PURPLE);
+    doc.rect(M,y,pageW-M*2,9,'DF');
+    doc.setFont('helvetica','italic'); doc.setFontSize(8); doc.setTextColor(...MID_GREY);
+    doc.text('Flow:  URLs  →  fetch_url()  →  clean_text()  →  Dask .frequencies()  →  Charts  →  PDF', M+4, y+6);
+    y+=14;
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  PAGE 3 — SECTION 3: CRAWLING RESULTS
+    // ═══════════════════════════════════════════════════════════════════
+    newPage();
+    sectionTitle('3','Crawling Results');
+    statTiles([
+      [String(totalPages),'Pages\nCrawled'],
+      [String(crawlHistory.length),'Sessions\nRun'],
+      [String(totalWords.toLocaleString()),'Total\nWords'],
+      [String(totalUniq.toLocaleString()),'Unique\nWords'],
+    ]);
+    infoBox([
+      `Latest session crawled: ${sess0.urls ? sess0.urls.join(', ') : 'N/A'}`,
+      `Pages in latest session: ${sess0.pages_crawled||0}   |   Total words: ${(sess0.total_words||0).toLocaleString()}   |   Unique: ${(sess0.unique_words||0).toLocaleString()}`,
+      `Common words between sessions: ${commonWords.length} words appear in top-50 of both latest sessions`,
+    ], TEAL);
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  SECTION 4: TOP WORDS
+    // ═══════════════════════════════════════════════════════════════════
+    newPage();
+    const urlA = sess0.urls ? sess0.urls[0] : 'Session 1';
+    sectionTitle('4',`Top 10 Words — Latest Session`);
+    doc.setFont('helvetica','italic'); doc.setFontSize(9); doc.setTextColor(...TEAL);
+    doc.text(`Source: ${urlA}`, M, y); y+=8;
+    if(top50a.length>0){
+      wordTable(top50a.slice(0,10).map((w,i)=>[i+1,w[0],w[1]]), PINK);
+    } else {
+      infoBox(['No word data available — run a crawl first.'],AMBER);
+    }
+
+    if(top50b.length>0){
+      const urlB = sess1 && sess1.urls ? sess1.urls[0] : 'Session 2';
+      sectionTitle('5',`Top 10 Words — Previous Session`);
+      doc.setFont('helvetica','italic'); doc.setFontSize(9); doc.setTextColor(...TEAL);
+      doc.text(`Source: ${urlB}`, M, y); y+=8;
+      wordTable(top50b.slice(0,10).map((w,i)=>[i+1,w[0],w[1]]), CYAN);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  SECTION 5 (or 6): COMMON WORDS
+    // ═══════════════════════════════════════════════════════════════════
+    chk(40);
+    sectionTitle('5','Common Words Analysis');
+    if(commonWords.length>0){
+      bodyText(`The following ${commonWords.length} words appear in the Top-50 lists of both recent sessions, representing shared vocabulary:`);
+      const chunks=[];
+      for(let i=0;i<commonWords.length;i+=8) chunks.push(commonWords.slice(i,i+8).join('  |  '));
+      infoBox(chunks.slice(0,5), TEAL);
+      featureCard('Insight',`Both crawled sites share ${commonWords.length} common words. These tend to be neutral utility words. Real differences show in site-specific vocabulary.`,PINK);
+    } else {
+      infoBox(['Common word analysis requires 2+ crawl sessions. Run another crawl to compare.'],AMBER);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  SECTION 6: EMAIL ALERTS
+    // ═══════════════════════════════════════════════════════════════════
+    newPage();
+    sectionTitle('6','Email Alerts System');
+    bodyText('The project includes an automated email notification system. After every crawl completes, the Flask backend sends a summary email to the configured Gmail address.');
+    subHeading('How the Email Alert System Works');
+    stepFlow([['1','Enter\nGmail'],['2','Crawl runs\nvia Flask'],['3','Backend sends\nSMTP email'],['4','Receive\nalert'],['5','Report link\nin email']],INDIGO);
+    for(const [title,body] of [
+      ['Step 1 — Gmail Setup','Open myaccount.google.com → Security → Turn ON 2-Step Verification. Then: Security → App passwords → Enter "crawler" → Generate. You get a 16-character code — copy it.'],
+      ['Step 2 — Paste into Colab (Cell 33)','SENDER_EMAIL = "you@gmail.com"  and  SENDER_PASSWORD = "xxxx xxxx xxxx xxxx" (the 16-char App Password, no spaces).'],
+      ['Step 3 — Configure in Website','Open the Report tab → Enter your email under "Email Alert Settings" → Select "Yes" → Click Save Settings.'],
+      ['Step 4 — Test the Alert','Click "Send Test Email" button to verify. If configured correctly you will see "Test email sent!" in seconds.'],
+    ]) featureCard(title,body,INDIGO);
+    infoBox(['Subject: WebCrawlr — Crawl Complete!','Fields: Pages Crawled, Total Words, Unique Words','Fields: Top 10 Words with frequency counts','Fields: URLs crawled, Timestamp'],INDIGO);
+    featureCard('Important Note','Your regular Gmail password will NOT work. You must use the App Password (16 characters from Google Account). If email fails, check 2-Step Verification is enabled.',AMBER);
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  SECTION 7: CRAWL HISTORY
+    // ═══════════════════════════════════════════════════════════════════
+    newPage();
+    sectionTitle('7','Crawl History & Session Trends');
+    bodyText('Every crawl session is automatically recorded in the History tab. The history stores timestamps, URLs, page counts, total words, and unique words for every session run during the browser session.');
+    subHeading('What is Stored Per Session');
+    twoCol([
+      ['Timestamp','Exact date and time when the crawl ran, stored in local time format.'],
+      ['URLs Crawled','Full list of all base URLs given as input for this session.'],
+      ['Pages Count','Total number of pages successfully fetched and parsed.'],
+      ['Total Words','Sum of all word occurrences found across all crawled pages.'],
+      ['Unique Words','Count of distinct words after removing stop words.'],
+      ['Top Words','Top word-frequency list used by the search engine for TF-IDF indexing.'],
+    ]);
+    infoBox([
+      'X-axis: Session 1, 2, 3... (chronological order)',
+      'Line 1: Total Words — measures raw content volume per session',
+      'Line 2: Unique Words — measures vocabulary diversity per session',
+      'A rising unique-words line means the site adds new content over time.',
+      'History is in-memory only; use Colab Part 12 to save to Google Drive.',
+    ],TEAL);
+    featureCard('How History Feeds Other Features','Crawl history is the data source for the Search Engine (TF-IDF index) and the PDF Report (session counts and word totals). More sessions = richer search results and better reports.',TEAL);
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  SECTION 8: SENTIMENT ANALYSIS
+    // ═══════════════════════════════════════════════════════════════════
+    newPage();
+    sectionTitle('8','Sentiment Analysis');
+    bodyText('Sentiment analysis classifies text as Positive, Negative, or Neutral. This project applies a keyword-based approach: each word in the top-50 list is matched against positive and negative word dictionaries to estimate the overall tone.');
+    subHeading('How Sentiment Analysis Works');
+    stepFlow([['1','Get Top-50\nword list'],['2','Match against\nPOS/NEG dict'],['3','Count word\nfrequencies'],['4','Calculate\n% scores'],['5','Classify\nsite tone']],PINK);
+    subHeading('Site Sentiment Comparison');
+    bodyText('Stacked bars: Green=Positive, Grey=Neutral, Pink=Negative');
+    y+=2;
+    sentimentBar(urlA.replace('https://','').substring(0,30), aPosC, aNegC, aNeuC);
+    if(top50b.length){ sentimentBar((sess1&&sess1.urls?sess1.urls[0]:'Session 2').replace('https://','').substring(0,30), bPosC, bNegC, bNeuC); }
+    y+=2;
+
+    const aTotal=aPosC+aNegC+aNeuC||1;
+    const aPosP=Math.round(100*aPosC/aTotal);
+    const aNegP=Math.round(100*aNegC/aTotal);
+    const aTone=aPosP>=40?'Positive':aNegP>=30?'Negative':'Neutral';
+    featureCard(`Latest Session — Tone: ${aTone} (${aPosP}% Pos / ${100-aPosP-aNegP}% Neu / ${aNegP}% Neg)`,`Positive words: ${top50a.filter(w=>POS_WORDS.has(w[0])).slice(0,5).map(w=>w[0]).join(', ')||'none'}. Negative: ${top50a.filter(w=>NEG_WORDS.has(w[0])).slice(0,3).map(w=>w[0]).join(', ')||'none'}.`,PINK);
+    featureCard('Practical Uses of Sentiment Analysis','Monitor brand reputation across websites, detect negative product reviews, compare content tone between competitors, and flag pages with unusually negative language.',PINK);
+    infoBox(['Context is ignored — "not good" would count "good" as positive incorrectly.','Sarcasm and irony cannot be detected with simple keyword matching.','For production quality, use NLTK VADER or TextBlob libraries instead.'],PINK);
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  SECTION 9: TF-IDF
+    // ═══════════════════════════════════════════════════════════════════
+    newPage();
+    sectionTitle('9','TF-IDF Search Engine');
+    bodyText('The project includes a built-in search engine using TF-IDF (Term Frequency - Inverse Document Frequency) scoring to rank crawled pages by relevance. This is the same fundamental algorithm used by real search engines.');
+    featureCard('TF — Term Frequency','TF measures how often a word appears in a document relative to total words. Formula: TF = word_count / total_words. A word appearing 50 times in 500-word page has TF = 0.10.',INDIGO);
+    featureCard('IDF — Inverse Document Frequency','IDF measures how rare a word is across ALL documents. Formula: IDF = log(total_docs / docs_containing_word). Rare specific words get high IDF scores.',ORANGE);
+    featureCard('TF-IDF = TF × IDF','A word scores high only if it appears frequently in ONE document AND is rare across others. This filters generic words and surfaces truly distinctive terms.',TEAL);
+
+    if(tfidf_a.length>0){
+      subHeading('TF-IDF Scores — Latest Session (Top 10)');
+      tfidfTable(tfidf_a);
+    }
+    if(tfidf_b.length>0){
+      subHeading('TF-IDF Scores — Previous Session (Top 10)');
+      tfidfTable(tfidf_b);
+    }
+
+    stepFlow([['1','User enters\nquery'],['2','Split into\nwords'],['3','Remove\nstop words'],['4','TF-IDF\nscore'],['5','Rank\npages'],['6','Show top\n8 results']],INDIGO);
+    infoBox([
+      'The search works on crawl history — run at least one crawl first.',
+      'Quick-search chips test common query types.',
+      'Partial matching: "book" also matches "books", "booking" etc.',
+      'More crawl sessions = larger index = more accurate results.',
+    ],INDIGO);
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  SECTION 10: TOP WORDS COMPARISON (all-time)
+    // ═══════════════════════════════════════════════════════════════════
+    newPage();
+    sectionTitle('10','All-Time Top Words Comparison');
+    bodyText('The chart below shows word frequency across all crawl sessions combined. Words are ranked by total occurrence count.');
+    if(allWordsSorted.length>0){
+      subHeading('All-Time Top 20 Words');
+      wordTable(allWordsSorted.slice(0,20).map((w,i)=>[i+1,w[0],w[1]]),CYAN);
+    } else {
+      infoBox(['No word data yet. Run a crawl to populate this section.'],AMBER);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  SECTION 11: SESSION HISTORY LOG
+    // ═══════════════════════════════════════════════════════════════════
+    newPage();
+    sectionTitle('11','Session History Log');
+    bodyText(`All ${crawlHistory.length} crawl session(s) recorded this browser session:`);
+    [...crawlHistory].reverse().forEach((session,i)=>{
+      chk(38);
+      doc.setFillColor(...BADGE); doc.rect(M,y,pageW-M*2,8,'F');
+      doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(...WHITE);
+      doc.text(`Session ${i+1}  —  ${session.timestamp}`, M+3, y+6);
+      y+=8;
+      doc.setFillColor(...LIGHT_GREY); doc.rect(M,y,pageW-M*2,22,'F');
+      doc.setFillColor(...TEAL); doc.rect(M,y,3,22,'F');
+      doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(...DARK_GREY);
+      const urlStr=(session.urls||[]).join(', ');
+      const urlLines=doc.splitTextToSize('URLs: '+urlStr, pageW-M*2-8);
+      urlLines.forEach((l,j)=>{ doc.text(l,M+5,y+6+j*5); });
+      doc.text(`Pages: ${session.pages_crawled}   |   Total Words: ${(session.total_words||0).toLocaleString()}   |   Unique Words: ${(session.unique_words||0).toLocaleString()}`, M+5, y+16);
+      y+=22;
+      if(session.top_words&&session.top_words.length>0){
+        const topStr=session.top_words.slice(0,10).map(w=>{ const word=Array.isArray(w)?w[0]:w.word; const cnt=Array.isArray(w)?w[1]:w.count; return `${word}(${cnt})`; }).join(', ');
+        const wrapped=doc.splitTextToSize('Top words: '+topStr, pageW-M*2);
+        doc.setFont('helvetica','italic'); doc.setFontSize(8); doc.setTextColor(...MID_GREY);
+        wrapped.forEach(l=>{ chk(6); doc.text(l,M,y); y+=5; });
+      }
+      doc.setDrawColor(190,160,235); doc.line(M,y,pageW-M,y); y+=5;
+    });
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  SECTION 12: CONCLUSION
+    // ═══════════════════════════════════════════════════════════════════
+    newPage();
+    sectionTitle('12','Conclusion & Key Findings');
+    for(const [t,b] of [
+      ['Parallel Crawling Works','Dask significantly simplifies parallel crawling with minimal code changes. Multiple pages are fetched simultaneously, reducing total crawl time compared to sequential processing.'],
+      ['Vocabulary Analysis Reveals Intent','Word frequency analysis clearly reveals site purpose — emotional/literary words for quotes sites vs. product/commerce terms for e-commerce catalogues.'],
+      ['Common Ground','Despite different purposes, both sites share common neutral everyday English words that appear across virtually any web domain.'],
+      ['Sentiment Difference Confirmed','Sentiment analysis confirms what vocabulary analysis suggests: quotes sites carry positive emotional tone while commercial sites are neutral.'],
+      ['TF-IDF Reveals True Importance','Raw frequency inflates common words; TF-IDF surfaces genuinely distinctive terms per site — exactly as real search engines do.'],
+      ['Email Alerts Automate Monitoring','Gmail alerts notify users immediately after each crawl completes, enabling unattended crawling with results delivered to inbox.'],
+      ['History Enables Longitudinal Analysis','Crawl history turns a one-shot tool into a monitoring system. Repeated crawls reveal whether site content is growing or staying static.'],
+      ['Real-Time Dashboard Enhances UX','Server-Sent Events streaming provides live progress updates, making the crawl process transparent and interactive.'],
+    ]) featureCard(t,b,TEAL);
+
+    // Sign-off banner
+    chk(24);
+    doc.setFillColor(...TEAL); doc.rect(0,y+2,pageW,22,'F');
+    doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(...WHITE);
+    doc.text('Report Complete   |   Distributed Web Crawler Project', pageW/2, y+11, {align:'center'});
+    doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(200,255,245);
+    doc.text(`Generated: ${today}   |   Python  Dask  BeautifulSoup4  NLTK  Matplotlib  FPDF2`, pageW/2, y+19, {align:'center'});
+
+    // ── Add headers/footers to all non-cover pages ────────────────────────
+    const totalPgs = doc.internal.getNumberOfPages();
+    for(let p=2; p<=totalPgs; p++){
+      doc.setPage(p);
+      drawHeaderFooter(p-1, totalPgs-1);
+    }
+
+    // Save
+    const filename = `WebCrawlr-Report-${new Date().toISOString().slice(0,10)}.pdf`;
+    doc.save(filename);
+    statusEl.textContent = `✅ PDF saved — "${filename}"  (${totalPgs} pages)`;
+
+  } catch(e) {
+    statusEl.textContent = '❌ PDF error: ' + e.message;
+    console.error('PDF Error:', e);
+  }
+}
+
+
+// ── PAGE LOAD: initialize the app ────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  // Load initial history display (will show empty state)
+  loadHistory();
+  console.log('WebCrawlr v3.0 initialized — all features ready!');
+  refreshReportStats();
+});
+
+// ── ERROR ACCORDION TOGGLE ────────────────────────────────────────────────
+function toggleError(card) {
+  const wasOpen = card.classList.contains('open');
+  // Close all
+  document.querySelectorAll('.error-card').forEach(c => c.classList.remove('open'));
+  // Open this one if it wasn't already open
+  if (!wasOpen) card.classList.add('open');
+}
+
+</script>
+<!-- ══════════════════════════════════════════════════════════════
+     AI ASSISTANT FLOATING CHAT
+     Ask anything about WebCrawlr, Colab setup, or crawled data
+     ══════════════════════════════════════════════════════════════ -->
+
+<!-- Floating Action Button -->
+<button id="ai-chat-fab" onclick="toggleAIChat()" title="Ask AI Assistant">✦</button>
+
+<!-- Chat Panel -->
+<div id="ai-chat-panel">
+  <!-- Header -->
+  <div class="ai-chat-header">
+    <div class="ai-chat-header-icon">✦</div>
+    <div class="ai-chat-header-text">
+      <div class="ai-chat-title">WebCrawlr AI Assistant</div>
+      <div class="ai-chat-subtitle" id="ai-header-sub">Ask anything about setup, errors, or crawling</div>
+    </div>
+    <button onclick="toggleAIChat()" style="background:none;border:none;color:rgba(255,255,255,0.7);font-size:20px;cursor:pointer;line-height:1;padding:0;">×</button>
+  </div>
+
+  <!-- API KEY SETUP SCREEN (shown first if no key) -->
+  <div id="ai-key-screen" style="padding:20px;display:flex;flex-direction:column;gap:14px;">
+    <div style="text-align:center;font-size:28px;margin-bottom:4px;">⚡</div>
+    <div style="font-size:14px;font-weight:700;color:var(--text);text-align:center;">Enter Your Groq API Key</div>
+    <div style="font-size:12px;color:var(--text2);line-height:1.6;text-align:center;">
+      Groq is <strong>100% free</strong> — fast AI with generous limits.<br>
+      Your key is <strong>never stored</strong> — only kept in memory.
+    </div>
+    <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:12px;color:var(--text2);line-height:1.8;">
+      <strong style="color:var(--text);">How to get a FREE key (1 minute):</strong><br>
+      1. Go to <a href="https://console.groq.com" target="_blank" style="color:var(--accent);font-weight:600;">console.groq.com</a><br>
+      2. Sign up free (Google/GitHub login works)<br>
+      3. Click <strong>API Keys</strong> → <strong>Create API Key</strong><br>
+      4. Copy the key (starts with <code style="font-family:var(--mono);background:var(--bg);padding:1px 4px;border-radius:3px;">gsk_</code>) → paste below
+    </div>
+    <input type="password" id="ai-key-input"
+      placeholder="gsk_..."
+      style="width:100%;padding:10px 13px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:var(--mono);background:var(--bg);color:var(--text);outline:none;"
+      onkeydown="if(event.key==='Enter') saveApiKey()"
+    />
+    <button onclick="saveApiKey()"
+      style="width:100%;padding:11px;background:linear-gradient(135deg,#f55036,#f97316);color:white;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;font-family:var(--sans);">
+      ⚡ Start Chatting (Free)
+    </button>
+    <div id="ai-key-error" style="font-size:12px;color:var(--danger);text-align:center;display:none;"></div>
+  </div>
+
+  <!-- CHAT SCREEN (shown after key is set) -->
+  <div id="ai-chat-screen" style="display:none;flex-direction:column;flex:1;overflow:hidden;min-height:0;">
+    <!-- Messages -->
+    <div class="ai-chat-messages" id="ai-messages">
+      <div class="ai-msg bot">
+        <div class="ai-msg-avatar">✦</div>
+        <div class="ai-msg-bubble">Hi! I'm your WebCrawlr assistant. Ask me anything — setup steps, fixing errors, how crawling works, or questions about your results. 🕷️</div>
+      </div>
+    </div>
+
+    <!-- Quick question chips -->
+    <div class="ai-quick-chips" id="ai-chips">
+      <div class="ai-chip" onclick="askChip(this)">How do I get my ngrok URL?</div>
+      <div class="ai-chip" onclick="askChip(this)">What is TF-IDF scoring?</div>
+      <div class="ai-chip" onclick="askChip(this)">Fix ERR_NGROK_334</div>
+      <div class="ai-chip" onclick="askChip(this)">How does Dask help crawling?</div>
+      <div class="ai-chip" onclick="askChip(this)">Set up Gmail App Password</div>
+      <div class="ai-chip" onclick="askChip(this)">What are stop words?</div>
+    </div>
+
+    <!-- Input -->
+    <div class="ai-chat-input-row">
+      <input type="text" id="ai-input" placeholder="Ask anything about WebCrawlr..." onkeydown="if(event.key==='Enter') sendAIMessage()" />
+      <button class="ai-send-btn" id="ai-send-btn" onclick="sendAIMessage()">➤</button>
+    </div>
+
+    <!-- Change key link -->
+    <div style="text-align:center;padding:6px 0 8px;border-top:1px solid var(--border);">
+      <button onclick="resetApiKey()" style="background:none;border:none;font-size:11px;color:var(--text3);cursor:pointer;font-family:var(--sans);">⚡ Change Groq API Key</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════════════════════════
+// AI ASSISTANT
+// ══════════════════════════════════════════════════════════════════════════
+
+let aiChatOpen = false;
+let aiTyping = false;
+let aiHistory = [];  // conversation history for multi-turn context
+let aiApiKey = '';   // Groq API key (session only)
+
+const AI_SYSTEM_PROMPT = `You are the WebCrawlr AI Assistant — a friendly, knowledgeable helper embedded inside WebCrawlr, a distributed web crawler tool built with:
+- Dask (parallel processing)
+- BeautifulSoup4 (HTML parsing)
+- NLTK (natural language / stop words)
+- Flask + ngrok (backend API)
+- Google Colab (cloud runtime)
+- Chart.js + jsPDF (frontend visualizations)
+
+The tool has these features:
+1. Standard Crawl — crawl multiple URLs, get word frequency analysis, bar charts, word clouds
+2. Real-Time Dashboard — live progress bar, SSE (Server-Sent Events), live word cloud
+3. Search Engine — TF-IDF based search over crawled pages
+4. Crawl History — session tracking with trend charts
+5. Report & Email Alerts — full PDF generation (client-side), Gmail App Password email alerts
+6. Setup Guide — step-by-step Colab notebook instructions
+
+Common errors and their fixes:
+- ERR_NGROK_334: old ngrok session running → ngrok.kill() is already in Cell 33 → just re-run Cell 33
+- Connection Failed: wrong URL, Colab tab closed, or backend cell not running → re-run Cell 33, paste new URL
+- Email send failed: using regular Gmail password instead of App Password → generate one at myaccount.google.com
+- ModuleNotFoundError langdetect: run Cell 47 first (!pip install langdetect)
+- No results: check URL includes https://, test with quotes.toscrape.com
+- Colab disconnects: free tier timeout → reconnect, re-run Cell 33 for a new URL
+
+Notebook cells:
+- Cell 2: install all libraries
+- Cell 3: mount Google Drive
+- Cell 30-33: Flask server setup (Cell 33 is main — edit NGROK_AUTH_TOKEN, SENDER_EMAIL, SENDER_PASSWORD)
+- Cell 40: email alert config
+- Cell 47-49: multi-language support
+- Cell 84-88: real-time dashboard backend (port 5001)
+
+Answer in a helpful, concise, friendly tone. Use bullet points or numbered steps when explaining. Keep responses under 200 words unless a detailed explanation is needed.`;
+
+function toggleAIChat() {
+  aiChatOpen = !aiChatOpen;
+  const fab = document.getElementById('ai-chat-fab');
+  const panel = document.getElementById('ai-chat-panel');
+  if (aiChatOpen) {
+    panel.classList.add('open');
+    fab.classList.add('open');
+    if (!aiApiKey) {
+      setTimeout(() => document.getElementById('ai-key-input').focus(), 100);
+    } else {
+      setTimeout(() => document.getElementById('ai-input').focus(), 100);
+    }
+  } else {
+    panel.classList.remove('open');
+    fab.classList.remove('open');
+  }
+}
+
+function saveApiKey() {
+  const keyInput = document.getElementById('ai-key-input');
+  const errEl = document.getElementById('ai-key-error');
+  const key = keyInput.value.trim();
+
+  if (!key || !key.startsWith('gsk_')) {
+    errEl.textContent = '⚠️ Please enter a valid Groq API key (starts with gsk_)';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  errEl.style.display = 'none';
+  aiApiKey = key;
+  keyInput.value = '';
+
+  document.getElementById('ai-key-screen').style.display = 'none';
+  const chatScreen = document.getElementById('ai-chat-screen');
+  chatScreen.style.display = 'flex';
+  document.getElementById('ai-header-sub').textContent = '⚡ Groq AI ready — ask anything!';
+  document.getElementById('ai-chat-panel').style.maxHeight = '560px';
+  setTimeout(() => document.getElementById('ai-input').focus(), 100);
+}
+
+function resetApiKey() {
+  aiApiKey = '';
+  aiHistory = [];
+  document.getElementById('ai-chat-screen').style.display = 'none';
+  document.getElementById('ai-key-screen').style.display = 'flex';
+  document.getElementById('ai-key-input').value = '';
+  document.getElementById('ai-key-error').style.display = 'none';
+  document.getElementById('ai-header-sub').textContent = 'Ask anything about setup, errors, or crawling';
+  document.getElementById('ai-messages').innerHTML = `
+    <div class="ai-msg bot">
+      <div class="ai-msg-avatar">✦</div>
+      <div class="ai-msg-bubble">Hi! I'm your WebCrawlr assistant powered by Groq AI. Ask me anything — setup steps, fixing errors, how crawling works, or questions about your results. 🕷️</div>
+    </div>`;
+  document.getElementById('ai-chips').style.display = 'flex';
+}
+
+function askChip(el) {
+  const q = el.textContent;
+  document.getElementById('ai-input').value = q;
+  document.getElementById('ai-chips').style.display = 'none';
+  sendAIMessage();
+}
+
+function addAIMessage(text, role) {
+  const container = document.getElementById('ai-messages');
+  const div = document.createElement('div');
+  div.className = `ai-msg ${role}`;
+  let formatted = text
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/`([^`]+)`/g, '<code style="font-family:var(--mono);background:var(--bg3);padding:1px 5px;border-radius:3px;font-size:12px;">$1</code>')
+    .replace(/\n/g, '<br>');
+  div.innerHTML = `
+    <div class="ai-msg-avatar">${role === 'bot' ? '✦' : '👤'}</div>
+    <div class="ai-msg-bubble">${formatted}</div>
+  `;
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+}
+
+function showTypingIndicator() {
+  const container = document.getElementById('ai-messages');
+  const div = document.createElement('div');
+  div.className = 'ai-msg bot';
+  div.id = 'ai-typing-indicator';
+  div.innerHTML = `
+    <div class="ai-msg-avatar">✦</div>
+    <div class="ai-msg-bubble" style="padding:12px 16px;">
+      <div class="ai-typing"><span></span><span></span><span></span></div>
+    </div>
+  `;
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+}
+
+function removeTypingIndicator() {
+  const el = document.getElementById('ai-typing-indicator');
+  if (el) el.remove();
+}
+
+async function sendAIMessage() {
+  const input = document.getElementById('ai-input');
+  const sendBtn = document.getElementById('ai-send-btn');
+  const text = input.value.trim();
+  if (!text || aiTyping || !aiApiKey) return;
+
+  input.value = '';
+  addAIMessage(text, 'user');
+  aiHistory.push({ role: 'user', content: text });
+
+  aiTyping = true;
+  sendBtn.disabled = true;
+  showTypingIndicator();
+
+  try {
+    // Groq API — free, fast, no special browser headers needed
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${aiApiKey}`
+      },
+      body: JSON.stringify({
+        model: 'llama-3.1-8b-instant',   // Free, fast Groq model
+        max_tokens: 1000,
+        temperature: 0.7,
+        messages: [
+          { role: 'system', content: AI_SYSTEM_PROMPT },
+          ...aiHistory
+        ]
+      })
+    });
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      const msg = errData.error?.message || `HTTP ${response.status}`;
+      throw new Error(msg);
+    }
+
+    const data = await response.json();
+    const reply = data.choices?.[0]?.message?.content || 'Sorry, I got an empty response. Please try again.';
+
+    removeTypingIndicator();
+    addAIMessage(reply, 'bot');
+    aiHistory.push({ role: 'assistant', content: reply });
+
+    if (aiHistory.length > 20) aiHistory = aiHistory.slice(-20);
+
+  } catch(e) {
+    removeTypingIndicator();
+    let errMsg = '⚠️ ';
+    if (e.message.includes('401') || e.message.includes('invalid_api_key') || e.message.includes('Unauthorized')) {
+      errMsg += 'Invalid Groq API key. Click **Change API Key** and enter a valid gsk_ key from console.groq.com';
+      aiApiKey = '';
+    } else if (e.message.includes('Failed to fetch') || e.message.includes('NetworkError')) {
+      errMsg += 'Network error — check your internet connection.';
+    } else if (e.message.includes('429') || e.message.includes('rate_limit')) {
+      errMsg += 'Rate limit reached. Wait a moment and try again (Groq free tier is very generous!).';
+    } else {
+      errMsg += 'Error: ' + e.message;
+    }
+    addAIMessage(errMsg, 'bot');
+  }
+
+  aiTyping = false;
+  sendBtn.disabled = false;
+  input.focus();
+}
+</script>
+</body>
+</html>

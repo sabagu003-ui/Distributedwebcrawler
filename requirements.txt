@@ -1,0 +1,11 @@
+dask[complete]
+beautifulsoup4
+requests
+nltk
+matplotlib
+seaborn
+fpdf2
+flask
+flask-cors
+pyngrok
+langdetect
